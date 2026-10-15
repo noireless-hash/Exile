@@ -8,26 +8,25 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates, // Bắt buộc để theo dõi voice channel
   ],
 });
 
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
+// Quản lý danh sách phòng và bộ đếm chờ dọn dẹp
+const managedEventRooms = new Set();
+const emptyRoomTimeouts = new Map();
+
 /**
- * Hàm thiết lập tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
- * @param {import('discord.js').TextChannel} channel 
- * @param {string} messageId 
- * @param {number} eventId 
- * @param {number} startTimestamp - Thời gian bắt đầu sự kiện (dạng timestamp mili-giây)
+ * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
  */
 function scheduleEventExpiration(channel, messageId, eventId, startTimestamp) {
   const now = Date.now();
-  // Thời điểm xóa = Thời gian bắt đầu sự kiện + 15 phút (15 * 60 * 1000 ms)
   const expirationTime = startTimestamp + (15 * 60 * 1000);
   const delay = expirationTime - now;
 
-  // Nếu thời gian hết hạn đã qua rồi thì không hẹn giờ nữa
   if (delay <= 0) return;
 
   setTimeout(async () => {
@@ -38,19 +37,92 @@ function scheduleEventExpiration(channel, messageId, eventId, startTimestamp) {
         console.log(`🗑️ Đã tự động xóa sự kiện #${eventId} sau 15 phút kể từ giờ hẹn.`);
       }
     } catch (error) {
-      console.error(`Không thể tự động xóa sự kiện #${eventId}:`, error);
+      console.error(`Không thể tự động xóa tin nhắn sự kiện #${eventId}:`, error);
     }
   }, delay);
 }
 
-// Gắn vào client để gọi từ các file khác
+/**
+ * 2. Tự động tạo phòng thoại khi đến giờ hẹn, phân quyền và ping gọi thành viên bên trong
+ */
+function scheduleEventRoomCreation(client, event) {
+  const now = Date.now();
+  const delay = event.start_ts - now;
+
+  if (delay <= 0) return;
+
+  setTimeout(async () => {
+    try {
+      const guild = await client.guilds.fetch(event.guild_id).catch(() => null);
+      if (!guild) return;
+
+      const signups = db.getSignups(event.id);
+      const attendingMembers = signups.filter(s => s.status === 'attending');
+
+      if (attendingMembers.length === 0) {
+        console.log(`⚠️ Sự kiện #${event.id} (${event.title}) đến giờ nhưng không có ai đăng ký.`);
+        return;
+      }
+
+      // Cấu hình quyền riêng tư
+      const permissionOverwrites = [
+        {
+          id: guild.roles.everyone.id,
+          deny: ['ViewChannel', 'Connect'],
+        },
+        {
+          id: client.user.id,
+          allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'],
+        }
+      ];
+
+      for (const memberSignup of attendingMembers) {
+        permissionOverwrites.push({
+          id: memberSignup.user_id,
+          allow: ['ViewChannel', 'Connect', 'Speak'],
+        });
+      }
+
+      // Tạo Voice Channel
+      const roomName = `⚔️│${event.title}`.toLowerCase().replace(/\s+/g, '-');
+      const createdChannel = await guild.channels.create({
+        name: roomName,
+        type: 2, // Voice Channel
+        permissionOverwrites: permissionOverwrites,
+      });
+
+      managedEventRooms.add(createdChannel.id);
+      console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
+
+      // Ping gọi tên thành viên fill role trực tiếp bên trong phòng thoại mới
+      try {
+        const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
+        await createdChannel.send(
+          `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
+          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}`
+        );
+      } catch (err) {
+        console.error('Không thể gửi tin nhắn ping trong voice channel, chuyển về kênh gốc.');
+        const originalChannel = await guild.channels.fetch(event.channel_id).catch(() => null);
+        if (originalChannel) {
+          const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
+          await originalChannel.send(`🚨 **[${event.title}] Đã đến giờ!** Phòng riêng: <#${createdChannel.id}>\n${mentions}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Lỗi khi tự động tạo phòng cho sự kiện #${event.id}:`, error);
+    }
+  }, delay);
+}
+
+// Gắn hàm vào client để gọi từ bên ngoài
 client.scheduleEventExpiration = scheduleEventExpiration;
+client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
-  // (Tùy chọn thông minh) Khi bot vừa khởi động lại, nó sẽ quét các sự kiện chưa xóa 
-  // trong Database để tiếp tục hẹn giờ xóa chính xác dù bot có bị sập nguồn/restart!
+  // Khôi phục lịch hẹn khi bot khởi động lại
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {
@@ -58,11 +130,56 @@ client.once('ready', async () => {
         const channel = await client.channels.fetch(event.channel_id).catch(() => null);
         if (channel) {
           scheduleEventExpiration(channel, event.message_id, event.id, event.start_ts);
+          scheduleEventRoomCreation(client, event);
         }
       }
     }
   } catch (err) {
-    console.error('Lỗi khi khôi phục lịch hẹn xóa sự kiện:', err);
+    console.error('Lỗi khi khôi phục lịch hẹn sự kiện:', err);
+  }
+});
+
+/**
+ * 3. Tự động dọn dẹp phòng thoại thông minh (Có 5 phút chờ người vào trễ)
+ */
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  try {
+    const oldChannelId = oldState.channelId;
+    const newChannelId = newState.channelId;
+
+    // Khi có người bước vào phòng -> Hủy lịch hẹn xóa (nếu có) vì đã có người vào trễ
+    if (newChannelId && managedEventRooms.has(newChannelId)) {
+      if (emptyRoomTimeouts.has(newChannelId)) {
+        clearTimeout(emptyRoomTimeouts.get(newChannelId));
+        emptyRoomTimeouts.delete(newChannelId);
+      }
+    }
+
+    // Khi có người rời phòng và phòng trở nên trống trơn
+    if (oldChannelId && managedEventRooms.has(oldChannelId)) {
+      const channel = oldState.channel;
+      if (channel && channel.members.size === 0) {
+        if (!emptyRoomTimeouts.has(oldChannelId)) {
+          const timeoutId = setTimeout(async () => {
+            try {
+              const currentChannel = await channel.guild.channels.fetch(oldChannelId).catch(() => null);
+              if (currentChannel && currentChannel.members.size === 0) {
+                await currentChannel.delete();
+                managedEventRooms.delete(oldChannelId);
+                console.log(`🧹 Đã dọn dẹp phòng thoại trống: ${currentChannel.name}`);
+              }
+            } catch (err) {
+              console.error('Lỗi khi xóa phòng trống:', err);
+            }
+            emptyRoomTimeouts.delete(oldChannelId);
+          }, 5 * 60 * 1000); // Chờ 5 phút cho người vào trễ
+
+          emptyRoomTimeouts.set(oldChannelId, timeoutId);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Lỗi xử lý voiceStateUpdate:', error);
   }
 });
 

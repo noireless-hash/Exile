@@ -1,8 +1,19 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Options } = require('discord.js');
 const config = require('./config');
 const eventCommand = require('./commands/event');
 const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
+
+// ==========================================
+// 0. BẮT LỖI TOÀN CỤC ĐỂ CHỐNG SẬP NGUỒN (CRASH)
+// ==========================================
+process.on('unhandledRejection', error => {
+  console.error('Lỗi Promise chưa được bắt (Unhandled Rejection):', error);
+});
+
+process.on('uncaughtException', error => {
+  console.error('Lỗi ngoại lệ chưa được bắt (Uncaught Exception):', error);
+});
 
 const client = new Client({
   intents: [
@@ -10,6 +21,14 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates, // Bắt buộc để theo dõi voice channel
   ],
+  // Tự động dọn dẹp message cũ trong RAM định kỳ để tiết kiệm tài nguyên VPS
+  sweepers: {
+    ...Options.DefaultSweeperSettings,
+    messages: {
+      interval: 3600,
+      lifetime: 1800,
+    },
+  },
 });
 
 client.commands = new Collection();
@@ -201,6 +220,9 @@ function scheduleEventRoomCreation(client, event) {
             sentBuildUsers.delete(memberSignup.user_id);
           }, 24 * 60 * 60 * 1000);
 
+          // Nghỉ nhẹ 0.5 giây giữa mỗi lần gửi DM để tránh bị Discord giới hạn (Rate Limit)
+          await new Promise(resolve => setTimeout(resolve, 500));
+
         } catch (err) {
           console.error(`Không thể gửi DM cho user ${memberSignup.user_id} (có thể họ chặn tin nhắn riêng).`);
         }
@@ -237,7 +259,7 @@ client.once('ready', async () => {
 });
 
 /**
- * 3. Tự động dọn dẹp phòng thoại thông minh (Đã tăng thời gian chờ lên 10 phút cho người vào trễ)
+ * 3. Tự động dọn dẹp phòng thoại thông minh (Thời gian chờ 10 phút cho người vào trễ)
  */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
@@ -269,7 +291,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
               console.error('Lỗi khi xóa phòng trống:', err);
             }
             emptyRoomTimeouts.delete(oldChannelId);
-          }, 10 * 60 * 1000); // Đã tăng lên 10 phút chờ người vào trễ
+          }, 10 * 60 * 1000); // 10 phút chờ người vào trễ
 
           emptyRoomTimeouts.set(oldChannelId, timeoutId);
         }

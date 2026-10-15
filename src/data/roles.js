@@ -4,27 +4,23 @@
 // emoji names to try, in priority order (most specific first), falling back to
 // the unicode `emoji`. `group` is the summary bucket (tank / dps / healer).
 const ROLES = [
-  { key: 'tank', label: 'Tank', emoji: '🛡️', group: 'tank', icons: ['tank'] },
-  { key: 'melee', label: 'Melee DPS', emoji: '⚔️', group: 'dps', icons: ['melee', 'dps'] },
-  { key: 'pranged', label: 'Physical Ranged DPS', emoji: '🏹', group: 'dps', icons: ['pranged', 'ranged', 'dps'] },
-  { key: 'mranged', label: 'Magical Ranged DPS', emoji: '🔮', group: 'dps', icons: ['mranged', 'ranged', 'dps'] },
-  { key: 'support', label: 'Healer/Support', emoji: '➕', group: 'healer', icons: ['healer', 'support'] },
+  { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
+  { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
+  { key: 'Healer', label: 'Healer', emoji: '♻️', group: 'Healer', icons: ['Healer'] },
+  { key: 'Support', label: 'Support', emoji: '🚸', group: 'Support', icons: ['Support'] },
 ];
 
 // Legacy/compat role keys that may still exist in the database from older
 // signups but are no longer offered as buttons. Rendered, never selectable.
-const LEGACY_ROLES = [
-  { key: 'ranged', label: 'Ranged DPS', emoji: '🏹', group: 'dps', icons: ['ranged', 'pranged', 'dps'] },
-];
-
-const ROLE_BY_KEY = new Map([...ROLES, ...LEGACY_ROLES].map((r) => [r.key, r]));
+const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
 // The three top-level role buttons on the public board. `dps` is not a role on
 // its own — clicking it opens an ephemeral picker for the three DPS subtypes.
 const MAIN_ROLE_BUTTONS = [
-  { kind: 'role', key: 'tank', label: 'Tank', emoji: '🛡️', icons: ['tank'] },
-  { kind: 'dps', label: 'DPS', emoji: '⚔️', icons: ['dps'] },
-  { kind: 'role', key: 'support', label: 'Healer/Support', emoji: '➕', icons: ['healer', 'support'] },
+  { kind: 'role', key: 'Tank', label: 'Tank', emoji: '🛡️', icons: ['Tank'] },
+  { kind: 'role', label: 'DPS', emoji: '⚔️', icons: ['DPS'] },
+  { kind: 'role', key: 'Healer', label: 'Healer', emoji: '♻️', icons: ['Healer'] },
+  { kind: 'role', key: 'Support', label: 'Support', emoji: '🚸', icons: ['Support'] },
 ];
 
 // The DPS subtype choices shown in the ephemeral picker.
@@ -33,9 +29,10 @@ const DPS_ROLES = ROLES.filter((r) => r.group === 'dps');
 // How the header summary line is grouped/labelled (the DPS subtypes collapse
 // into one "DPS" bucket), matching the compact Tank / DPS / Healer-Support row.
 const ROLE_GROUPS = [
-  { label: 'Tank', emoji: '🛡️', icons: ['tank'], keys: ['tank'] },
-  { label: 'DPS', emoji: '⚔️', icons: ['dps'], keys: ['melee', 'pranged', 'mranged', 'ranged'] },
-  { label: 'Healer/Support', emoji: '➕', icons: ['healer', 'support'], keys: ['support'] },
+  { label: 'Tank', emoji: '🛡️', icons: ['Tank'], keys: ['Tank'] },
+  { label: 'DPS', emoji: '⚔️', icons: ['DPS'], keys: ['DPS'] },
+  { label: 'Healer', emoji: '♻️', icons: ['Healer'], keys: ['Healer'] },
+  { label: 'Support', emoji: '🚸', icons: ['Support'], keys: ['Support'] },
 ];
 
 // Signup statuses. "attending" means they filled a role above.

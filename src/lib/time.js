@@ -1,22 +1,40 @@
 const { DateTime } = require('luxon');
 
-// Parse a wall-clock date + time in a given IANA timezone into a UTC unix timestamp (seconds).
-// Accepts 24-hour (17:30, 5:30) and 12-hour (5:30pm, 5pm, 5:30 PM) time formats.
-// Returns { ok: true, ts } or { ok: false, error }.
-const TIME_FORMATS = ['HH:mm', 'H:mm', 'h:mma', 'h:mm a', 'ha', 'h a', 'hmma'];
+// Múi giờ mặc định cho Việt Nam (UTC+7)
+const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
-function parseEventTime(date, time, timezone) {
-  if (!DateTime.local().setZone(timezone).isValid) {
-    return { ok: false, error: `Unknown timezone \`${timezone}\`. Use an IANA name like \`America/New_York\`.` };
+// Các định dạng giờ phổ biến (bao gồm cả chuẩn 24h, 12h AM/PM và dạng "18h30" của Việt Nam)
+const TIME_FORMATS = [
+  'HH:mm',
+  'H:mm',
+  'HH\'h\'mm',  // 18h30
+  'H\'h\'mm',   // 6h30
+  'HH\'h\'',    // 18h
+  'H\'h\'',     // 6h
+  'h:mma',
+  'h:mm a',
+  'ha',
+  'h a',
+  'hmma',
+];
+
+// Parse ngày + giờ theo múi giờ chỉ định (mặc định Asia/Ho_Chi_Minh) ra Unix timestamp (giây)
+function parseEventTime(date, time, timezone = DEFAULT_TIMEZONE) {
+  const targetTz = timezone || DEFAULT_TIMEZONE;
+
+  if (!DateTime.local().setZone(targetTz).isValid) {
+    return {
+      ok: false,
+      error: `Múi giờ \`${timezone}\` không hợp lệ. Vui lòng sử dụng múi giờ chuẩn IANA như \`Asia/Ho_Chi_Minh\`.`,
+    };
   }
 
-  // Normalize: drop internal spaces around am/pm and uppercase the meridiem so
-  // "5:30 pm", "5:30PM" and "5:30pm" all parse the same way.
-  const cleanTime = String(time).trim().replace(/\s+/g, '').toLowerCase();
+  // Chuẩn hóa chuỗi thời gian nhập vào: xóa khoảng trắng dư thừa, đưa về chữ thường
+  const cleanTime = String(time || '').trim().replace(/\s+/g, '').toLowerCase();
 
   let dt;
   for (const fmt of TIME_FORMATS) {
-    dt = DateTime.fromFormat(`${date} ${cleanTime}`, `yyyy-MM-dd ${fmt}`, { zone: timezone });
+    dt = DateTime.fromFormat(`${date} ${cleanTime}`, `yyyy-MM-dd ${fmt}`, { zone: targetTz });
     if (dt.isValid) break;
   }
 
@@ -24,27 +42,27 @@ function parseEventTime(date, time, timezone) {
     return {
       ok: false,
       error:
-        'Could not read that date/time. Use date `YYYY-MM-DD` (e.g. `2026-06-27`) and a time ' +
-        'like `13:00`, `5:30pm`, or `5pm`.',
+        'Không thể đọc định dạng ngày/giờ này. Vui lòng nhập ngày theo dạng `YYYY-MM-DD` (VD: `2026-07-05`) ' +
+        'và giờ theo dạng `18:00`, `18h30`, `6:30pm` hoặc `6pm`.',
     };
   }
 
   return { ok: true, ts: Math.floor(dt.toSeconds()) };
 }
 
-// Split a stored unix timestamp back into wall-clock { date, time } strings in
-// the event's timezone — used to prefill the edit modal.
-function formatLocalParts(ts, timezone) {
-  const dt = DateTime.fromSeconds(ts, { zone: timezone });
+// Chuyển timestamp unix ngược lại thành ngày & giờ theo múi giờ local (để prefill modal edit)
+function formatLocalParts(ts, timezone = DEFAULT_TIMEZONE) {
+  const targetTz = timezone || DEFAULT_TIMEZONE;
+  const dt = DateTime.fromSeconds(ts, { zone: targetTz });
   if (!dt.isValid) return { date: '', time: '' };
   return { date: dt.toFormat('yyyy-MM-dd'), time: dt.toFormat('HH:mm') };
 }
 
-// Discord renders these as localized timestamps in each viewer's own timezone.
+// Discord tự động hiển thị timestamp chuẩn theo múi giờ trên máy/điện thoại của từng thành viên
 const discordTime = (ts, style = 'F') => `<t:${ts}:${style}>`;
 const discordRelative = (ts) => `<t:${ts}:R>`;
 
-// Build a "Add to Google Calendar" link. startTs in unix seconds, duration in minutes.
+// Tạo đường dẫn "Thêm vào Google Calendar"
 function googleCalendarLink({ title, startTs, durationMin = 120, details, location }) {
   const fmt = (s) => DateTime.fromSeconds(s, { zone: 'utc' }).toFormat("yyyyLLdd'T'HHmmss'Z'");
   const params = new URLSearchParams({
@@ -57,9 +75,17 @@ function googleCalendarLink({ title, startTs, durationMin = 120, details, locati
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-// True if `tz` is a valid IANA timezone name (e.g. America/Los_Angeles).
+// Kiểm tra xem chuỗi múi giờ nhập vào có hợp lệ không
 function isValidTimezone(tz) {
   return !!tz && DateTime.local().setZone(tz).isValid;
 }
 
-module.exports = { parseEventTime, isValidTimezone, formatLocalParts, discordTime, discordRelative, googleCalendarLink };
+module.exports = {
+  DEFAULT_TIMEZONE,
+  parseEventTime,
+  isValidTimezone,
+  formatLocalParts,
+  discordTime,
+  discordRelative,
+  googleCalendarLink,
+};

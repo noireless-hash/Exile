@@ -40,6 +40,19 @@ module.exports = {
 
     if (subcommand === 'create') {
       try {
+        // 1. Kiểm tra điều kiện sự kiện trước đó (Phải có tối thiểu 4 người tham gia)
+        const previousEvent = db.getLatestEvent ? db.getLatestEvent() : null;
+        if (previousEvent) {
+          const previousSignups = db.getSignups(previousEvent.id);
+          const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
+
+          if (attendingCount < 4) {
+            return interaction.editReply({
+              content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} - ${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu. Cần đảm bảo đủ lực lượng hoặc xử lý sự kiện cũ trước để tránh thiếu người!`,
+            });
+          }
+        }
+
         const title = interaction.options.getString('title');
         const timeStr = interaction.options.getString('time');
         const description = interaction.options.getString('description') || null;
@@ -68,6 +81,11 @@ module.exports = {
 
         const sent = await interaction.channel.send(msgData);
         db.setEventMessage(eventId, sent.id);
+
+        // 2. Kích hoạt tự động hẹn giờ xóa tin nhắn sau 15 phút tính từ giờ hẹn bắt đầu (start_ts)
+        if (typeof interaction.client.scheduleEventExpiration === 'function') {
+          interaction.client.scheduleEventExpiration(interaction.channel, sent.id, eventId, event.start_ts);
+        }
 
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
       } catch (err) {

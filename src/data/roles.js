@@ -1,6 +1,4 @@
-// Attending roles (mutually exclusive per member) and non-attending statuses.
-
-// Roles a member fills when they ARE coming.
+// Attending roles (dùng để phân loại/thống kê, không dùng làm nút bấm công khai nữa)
 const ROLES = [
   { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
   { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
@@ -8,18 +6,22 @@ const ROLES = [
   { key: 'Support', label: 'Support', emoji: '🚸', group: 'Support', icons: ['Support'] },
 ];
 
-// Để mảng rỗng để tương thích với các file cũ đang require LEGACY_ROLES
 const LEGACY_ROLES = [];
-
 const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
-// ĐIỀU CHỈNH: Trả về nút giả định hoặc để mảng rỗng (Discord không cho phép ActionRow rỗng)
-const MAIN_ROLE_BUTTONS = [];
+// BỎ HOÀN TOÀN CÁC NÚT BẤM ROLE CỦ
+// Chuyển MAIN_ROLE_BUTTONS sang dùng các Jobs làm nút bấm trực tiếp
+// (Giúp tránh lỗi Discord API crash do ActionRow bị rỗng)
+const MAIN_ROLE_BUTTONS = JOBS.map((job) => ({
+  kind: 'role',
+  key: job.code,
+  label: job.name,
+  emoji: job.emoji,
+  icons: [job.code],
+}));
 
-// The DPS subtype choices shown in the ephemeral picker.
 const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
 
-// How the header summary line is grouped/labelled.
 const ROLE_GROUPS = [
   { label: 'Tank', emoji: '🛡️', icons: ['Tank'], keys: ['Tank'] },
   { label: 'DPS', emoji: '⚔️', icons: ['DPS'], keys: ['DPS'] },
@@ -27,7 +29,6 @@ const ROLE_GROUPS = [
   { label: 'Support', emoji: '🚸', icons: ['Support'], keys: ['Support'] },
 ];
 
-// Signup statuses. "attending" means they filled a role above.
 const STATUS = {
   ATTENDING: 'attending',
   TENTATIVE: 'tentative',

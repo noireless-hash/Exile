@@ -1,78 +1,50 @@
-// Cấu hình các nhóm Vai trò (Role Groups) cho Albion Online
-const ROLE_GROUPS = [
-  {
-    key: 'Tank',
-    label: 'Tank',
+/**
+ * Danh sách các Role chính thức trong hệ thống sự kiện Albion Online
+ */
+const ROLES = {
+  TANK: {
+    key: 'TANK',
+    name: 'Tank',
     emoji: '🛡️',
-    icons: ['Tank'],
-    keys: ['Tank'],
+    color: '#3498DB'
   },
-  {
+  DPS: {
     key: 'DPS',
-    label: 'DPS',
+    name: 'DPS',
     emoji: '⚔️',
-    icons: ['DPS'],
-    keys: ['DPS', 'Melee DPS', 'Ranged DPS'],
+    color: '#E74C3C'
   },
-  {
-    key: 'Healer',
-    label: 'Healer',
-    emoji: '♻️',
-    icons: ['Healer'],
-    keys: ['Healer'],
+  HEALER: {
+    key: 'HEALER',
+    name: 'Healer',
+    emoji: '🌿',
+    color: '#2ECC71'
   },
-  {
-    key: 'Support',
-    label: 'Support',
-    emoji: '🚸',
-    icons: ['Support'],
-    keys: ['Support', 'Utility'],
-  },
-];
-
-// Danh sách các Vai trò (Roles) chính
-const ROLES = ROLE_GROUPS.map((g) => ({
-  key: g.key,
-  label: g.label,
-  emoji: g.emoji,
-  group: g.key,
-  icons: g.icons,
-}));
-
-const LEGACY_ROLES = [];
-const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
-
-// 4 Nút bấm vai trò chính hiển thị trên Hàng 1 của Event Message
-const MAIN_ROLE_BUTTONS = ROLE_GROUPS.map((group) => ({
-  kind: 'role',
-  key: group.key,
-  label: group.label,
-  emoji: group.emoji,
-  icons: group.icons,
-}));
-
-const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
-
-// Định nghĩa các trạng thái tham gia sự kiện
-const STATUS = {
-  ATTENDING: 'attending',
-  TENTATIVE: 'tentative',
-  ABSENCE: 'absence',
+  SUPPORT: {
+    key: 'SUPPORT',
+    name: 'Support',
+    emoji: '⚡',
+    color: '#F1C40F'
+  }
 };
 
-// Các nút trạng thái bổ trợ hiển thị trên Hàng 2
-const EXTRA_STATUSES = [
-  { key: STATUS.TENTATIVE, label: 'Tentative', emoji: '❔' },
-  { key: STATUS.ABSENCE, label: 'Absence', emoji: '❌' },
-];
+/**
+ * Kiểm tra xem một chuỗi role có hợp lệ hay không
+ */
+function isValidRole(roleKey) {
+  if (!roleKey) return false;
+  return Object.prototype.hasOwnProperty.call(ROLES, roleKey.toUpperCase());
+}
+
+/**
+ * Lấy danh sách tất cả các role dưới dạng mảng
+ */
+function getAllRoles() {
+  return Object.values(ROLES);
+}
 
 module.exports = {
   ROLES,
-  LEGACY_ROLES,
-  ROLE_BY_KEY,
-  MAIN_ROLE_BUTTONS,
-  DPS_ROLES,
-  ROLE_GROUPS,
-  STATUS,
-  EXTRA_STATUSES,
+  isValidRole,
+  getAllRoles,
 };

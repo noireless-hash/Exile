@@ -1,91 +1,141 @@
 const { DateTime } = require('luxon');
 
-// Múi giờ mặc định cho Việt Nam (UTC+7)
-const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
+/**
+ * Đọc định dạng giờ linh hoạt (20:00, 20h30, 20h, 8pm, 8:30pm, 8.30)
+ */
+function parseTimeString(timeStr) {
+  if (!timeStr) return null;
+  const clean = timeStr.trim().toLowerCase().replace(/\s+/g, '');
 
-// Các định dạng giờ phổ biến (bao gồm cả chuẩn 24h, 12h AM/PM và dạng "18h30" của Việt Nam)
-const TIME_FORMATS = [
-  'HH:mm',
-  'H:mm',
-  'HH\'h\'mm',  // 18h30
-  'H\'h\'mm',   // 6h30
-  'HH\'h\'',    // 18h
-  'H\'h\'',     // 6h
-  'h:mma',
-  'h:mm a',
-  'ha',
-  'h a',
-  'hmma',
-];
+  // 1. Dạng 20:30, 20.30 hoặc 8:30
+  let match = clean.match(/^(\d{1,2})[:.](\d{2})(am|pm)?$/);
+  if (match) {
+    let hour = parseInt(match[1], 10);
+    const min = parseInt(match[2], 10);
+    const mer = match[3];
+    if (mer === 'pm' && hour < 12) hour += 12;
+    if (mer === 'am' && hour === 12) hour = 0;
+    if (hour >= 0 && hour < 24 && min >= 0 && min < 60) {
+      return { hour, min };
+    }
+  }
 
-// Parse ngày + giờ theo múi giờ chỉ định (mặc định Asia/Ho_Chi_Minh) ra Unix timestamp (giây)
-function parseEventTime(date, time, timezone = DEFAULT_TIMEZONE) {
-  const targetTz = timezone || DEFAULT_TIMEZONE;
+  // 2. Dạng 20h30, 20h, 8h30
+  match = clean.match(/^(\d{1,2})h(\d{2})?$/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const min = match[2] ? parseInt(match[2], 10) : 0;
+    if (hour >= 0 && hour < 24 && min >= 0 && min < 60) {
+      return { hour, min };
+    }
+  }
 
-  if (!DateTime.local().setZone(targetTz).isValid) {
+  // 3. Dạng 8pm, 8am, 20
+  match = clean.match(/^(\d{1,2})(am|pm)?$/);
+  if (match) {
+    let hour = parseInt(match[1], 10);
+    const mer = match[2];
+    if (mer === 'pm' && hour < 12) hour += 12;
+    if (mer === 'am' && hour === 12) hour = 0;
+    if (hour >= 0 && hour < 24) {
+      return { hour, min: 0 };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Chuyển đổi ngày & giờ nhập vào thành Unix Timestamp
+ */
+function parseEventTime(dateStr, timeStr, timezone = 'Asia/Ho_Chi_Minh') {
+  const timeParsed = parseTimeString(timeStr);
+  if (!timeParsed) {
     return {
-      ok: false,
-      error: `Múi giờ \`${timezone}\` không hợp lệ. Vui lòng sử dụng múi giờ chuẩn IANA như \`Asia/Ho_Chi_Minh\`.`,
+      valid: false,
+      error: 'Vui lòng nhập giờ hợp lệ (VD: 20:00, 20h30, 8pm, 20h).',
     };
   }
 
-  // Chuẩn hóa chuỗi thời gian nhập vào: xóa khoảng trắng dư thừa, đưa về chữ thường
-  const cleanTime = String(time || '').trim().replace(/\s+/g, '').toLowerCase();
+  // Lấy thời gian hiện tại ở múi giờ được cấu hình (Mặc định: Asia/Ho_Chi_Minh)
+  let now = DateTime.now().setZone(timezone);
 
-  let dt;
-  for (const fmt of TIME_FORMATS) {
-    dt = DateTime.fromFormat(`${date} ${cleanTime}`, `yyyy-MM-dd ${fmt}`, { zone: targetTz });
-    if (dt.isValid) break;
+  if (dateStr && dateStr !== 'today') {
+    const matchDate = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (matchDate) {
+      now = DateTime.fromObject(
+        {
+          year: parseInt(matchDate[1], 10),
+          month: parseInt(matchDate[2], 10),
+          day: parseInt(matchDate[3], 10),
+        },
+        { zone: timezone }
+      );
+    }
   }
 
-  if (!dt || !dt.isValid) {
-    return {
-      ok: false,
-      error:
-        'Không thể đọc định dạng ngày/giờ này. Vui lòng nhập ngày theo dạng `YYYY-MM-DD` (VD: `2026-07-05`) ' +
-        'và giờ theo dạng `18:00`, `18h30`, `6:30pm` hoặc `6pm`.',
-    };
+  const eventDt = now.set({
+    hour: timeParsed.hour,
+    minute: timeParsed.min,
+    second: 0,
+    millisecond: 0,
+  });
+
+  if (!eventDt.isValid) {
+    return { valid: false, error: 'Thời gian không hợp lệ.' };
   }
 
-  return { ok: true, ts: Math.floor(dt.toSeconds()) };
+  return {
+    valid: true,
+    startTs: Math.floor(eventDt.toSeconds()),
+  };
 }
 
-// Chuyển timestamp unix ngược lại thành ngày & giờ theo múi giờ local (để prefill modal edit)
-function formatLocalParts(ts, timezone = DEFAULT_TIMEZONE) {
-  const targetTz = timezone || DEFAULT_TIMEZONE;
-  const dt = DateTime.fromSeconds(ts, { zone: targetTz });
-  if (!dt.isValid) return { date: '', time: '' };
-  return { date: dt.toFormat('yyyy-MM-dd'), time: dt.toFormat('HH:mm') };
+/**
+ * Định dạng Unix Timestamp sang thẻ hiển thị thời gian của Discord (<t:timestamp:style>)
+ */
+function discordTime(timestamp, style = 't') {
+  if (!timestamp) return '';
+  return `<t:${timestamp}:${style}>`;
 }
 
-// Discord tự động hiển thị timestamp chuẩn theo múi giờ trên máy/điện thoại của từng thành viên
-const discordTime = (ts, style = 'F') => `<t:${ts}:${style}>`;
-const discordRelative = (ts) => `<t:${ts}:R>`;
+/**
+ * Tách Unix Timestamp thành Ngày và Giờ cục bộ (dùng cho Edit Modal)
+ */
+function formatLocalParts(timestamp, timezone = 'Asia/Ho_Chi_Minh') {
+  if (!timestamp) return { date: '', time: '' };
+  const dt = DateTime.fromSeconds(timestamp).setZone(timezone);
+  return {
+    date: dt.toFormat('yyyy-MM-dd'),
+    time: dt.toFormat('HH:mm'),
+  };
+}
 
-// Tạo đường dẫn "Thêm vào Google Calendar"
-function googleCalendarLink({ title, startTs, durationMin = 120, details, location }) {
-  const fmt = (s) => DateTime.fromSeconds(s, { zone: 'utc' }).toFormat("yyyyLLdd'T'HHmmss'Z'");
+/**
+ * Tạo đường dẫn thêm sự kiện vào Google Calendar
+ */
+function googleCalendarLink({ title, startTs, durationMin = 120, details }) {
+  const startDt = DateTime.fromSeconds(startTs).toUTC();
+  const endDt = startDt.plus({ minutes: durationMin });
+
+  const fmt = (dt) => dt.toFormat("yyyyMMdd'T'HHmmss'Z'");
+  const dates = `${fmt(startDt)}/${fmt(endDt)}`;
+
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: title || 'Event',
-    dates: `${fmt(startTs)}/${fmt(startTs + durationMin * 60)}`,
+    text: title || 'Albion Online Event',
+    dates,
   });
-  if (details) params.set('details', details);
-  if (location) params.set('location', location);
+
+  if (details) params.append('details', details);
+
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-// Kiểm tra xem chuỗi múi giờ nhập vào có hợp lệ không
-function isValidTimezone(tz) {
-  return !!tz && DateTime.local().setZone(tz).isValid;
-}
-
 module.exports = {
-  DEFAULT_TIMEZONE,
+  parseTimeString,
   parseEventTime,
-  isValidTimezone,
-  formatLocalParts,
   discordTime,
-  discordRelative,
+  formatLocalParts,
   googleCalendarLink,
 };

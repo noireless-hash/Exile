@@ -1,85 +1,52 @@
-// Pop-item checklists. A "pop set" is a named template of Notorious Monsters /
-// gods grouped together, each with the item that pops (spawns) it. Players tick
-// the items they personally have so the group can see coverage before a run.
-//
-// `key` on each item is a stable slug stored in the database; labels/order come
-// from this file at render time, so templates can be tweaked without migrations.
+// Pop-item checklists cho Albion Online. 
+// Quản lý danh sách các trang bị, nguyên liệu hoặc vật phẩm quan trọng mà người chơi cần mang theo trước mỗi buổi Raid/ZvZ.
 
 function slug(s) {
-  return String(s)
+  return String(s || '')
     .toLowerCase()
     .replace(/['’]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
 }
 
-// Build a template's groups, auto-deriving each item's stable key.
-// `pop: true` marks an item that must be traded to spawn the god (an
-// ingredient). Items without it (the god's own Seal, stray loot like Curtana)
-// are tracked for coverage but don't gate how many times the god can be popped.
 function buildTemplate(groups) {
   return groups.map((g) => ({
     name: g.name,
     emoji: g.emoji,
-    image: g.image || null, // optional god artwork (embed thumbnail)
+    image: g.image || null,
     items: g.items.map((it) => ({
       key: `${slug(g.name)}__${slug(it.item)}`,
-      item: it.item, // the trade/pop item a player can hold
-      nm: it.nm, // the NM / god this item pops (context)
-      pop: Boolean(it.pop), // true = required to spawn the god
-      trophy: Boolean(it.trophy), // true = the god's own Seal (reward)
+      item: it.item,
+      nm: it.nm,
+      pop: Boolean(it.pop),
+      trophy: Boolean(it.trophy),
     })),
   }));
 }
 
 const TEMPLATES = {
-  // HorizonXI Sky — the four Lesser Gods and their pop-item trees.
-  sky: {
-    id: 'sky',
-    title: 'Sky Gods — Pop Item Checklist',
-    emoji: '🗝️',
+  // Checklist cho Avalonian Raid / High-end PVE
+  ava_raid: {
+    id: 'ava_raid',
+    title: 'Avalonian Raid — Gear & Consumables Checklist',
+    emoji: '⚔️',
     groups: buildTemplate([
       {
-        name: 'Seiryu',
-        emoji: '🟦',
-        image: 'https://static.wikia.nocookie.net/ffxi/images/3/33/Seiryu.jpg',
+        name: 'Consumables & Food',
+        emoji: '🧪',
         items: [
-          { nm: 'Seiryu', item: 'Seal of Seiryu', trophy: true },
-          { nm: 'Steam Cleaner', item: 'Gem of the East', pop: true },
-          { nm: 'Mother Globe', item: 'Springstone', pop: true },
+          { nm: 'Buff Food', item: 'Pork Roast T8', pop: true },
+          { nm: 'Potions', item: 'Major Poison Potion T8', pop: true },
+          { nm: 'Resilience Potions', item: 'Gigantic Potion T8', pop: true },
         ],
       },
       {
-        name: 'Suzaku',
-        emoji: '🟥',
-        image: 'https://static.wikia.nocookie.net/ffxi/images/a/af/Suzaku.jpg',
+        name: 'Essential Tank & Support Gear',
+        emoji: '🛡️',
         items: [
-          { nm: 'Suzaku', item: 'Seal of Suzaku', trophy: true },
-          { nm: 'Brigandish Blade', item: 'Gem of the South', pop: true },
-          { nm: 'Brigandish Blade', item: 'Curtana' },
-          { nm: 'Faust', item: 'Summerstone', pop: true },
-        ],
-      },
-      {
-        name: 'Byakko',
-        emoji: '⬜',
-        image: 'https://static.wikia.nocookie.net/ffxi/images/0/03/Byakko.jpg',
-        items: [
-          { nm: 'Byakko', item: 'Seal of Byakko', trophy: true },
-          { nm: 'Despot', item: 'Gem of the West', pop: true },
-          { nm: 'Ullikummi', item: 'Autumnstone', pop: true },
-          { nm: 'Aura Statue', item: 'Diorite' },
-        ],
-      },
-      {
-        name: 'Genbu',
-        emoji: '🟩',
-        image: 'https://static.wikia.nocookie.net/ffxi/images/c/c6/Genbu.jpg',
-        items: [
-          { nm: 'Genbu', item: 'Seal of Genbu', trophy: true },
-          { nm: 'Zipacna', item: 'Gem of the North', pop: true },
-          { nm: 'Olla Grande', item: 'Winterstone', pop: true },
-          { nm: 'Aura Pot', item: "Ro'Maeve Water" },
+          { nm: 'Incubus Mace', item: 'Incubus Mace T8.3', pop: true },
+          { nm: 'Shadowcaller', item: 'Shadowcaller T8.3', pop: true },
+          { nm: 'Enigmatic Staff', item: 'Enigmatic Staff T8.3', pop: true },
         ],
       },
     ]),
@@ -90,14 +57,13 @@ function getTemplate(id) {
   return TEMPLATES[id] || null;
 }
 
-// Flat list of every item in a template (used for the picker menu).
 function templateItems(template) {
+  if (!template || !template.groups) return [];
   return template.groups.flatMap((g) =>
     g.items.map((it) => ({ ...it, group: g.name, groupEmoji: g.emoji })),
   );
 }
 
-// Look up a single item across a template by its stable key.
 function findItem(template, key) {
   return templateItems(template).find((it) => it.key === key) || null;
 }

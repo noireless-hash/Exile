@@ -1,7 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
-// Bản đồ tra cứu Emoji cho từng loại vũ khí
 const WEAPON_EMOJIS = {
   'Heavy Mace': '🛡️',
   'Incubus Mace': '🦇',
@@ -72,19 +71,18 @@ function buildWeaponSelectMenu(eventId, role) {
 
 function buildEventMessage(event, signups = [], currentRole = null) {
   const uppercaseTitle = (event.title || '').toUpperCase();
+  
+  // Dùng tiêu đề lớn cấp 1 của Markdown để phóng to tiêu đề
+  const bigTitle = `# ⚔️ ${uppercaseTitle} ⚔️`;
+  const descText = event.description ? `\n*${event.description}*` : '';
 
   const embed = new EmbedBuilder()
     .setColor(0xAA8833)
-    .setTitle(`⚔️ [ ${uppercaseTitle} ] ⚔️`);
-
-  if (event.description) {
-    embed.setDescription(`*${event.description}*`);
-  }
+    .setDescription(`${bigTitle}${descText}`);
 
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
 
-  // Lọc danh sách đăng ký theo từng Role và hiển thị kèm Emoji của vũ khí
   const roles = [
     { name: '🛡️ Tank', key: 'TANK' },
     { name: '⚔️ DPS', key: 'DPS' },
@@ -117,7 +115,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  // 3 Hàng Tương Tác Nút Bấm & Select Menu
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
     new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),

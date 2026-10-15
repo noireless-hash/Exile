@@ -1,6 +1,24 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
+// Bản đồ tra cứu Emoji cho từng loại vũ khí
+const WEAPON_EMOJIS = {
+  'Heavy Mace': '🛡️',
+  'Incubus Mace': '🦇',
+  'Great Hammer': '⚓',
+  'Enigmatic Staff': '🛡️',
+  'Fire Staff': '🔥',
+  'Frost Staff': '❄️',
+  'Bow': '🏹',
+  'Crossbow': '⚡',
+  'Melee DPS': '🗡️',
+  'Holy Healer': '🌿',
+  'Nature Healer': '🍃',
+  'Fallen Staff': '✨',
+  'Arcane Support': '📯',
+  'Utility Support': '🕯️'
+};
+
 function buildWeaponSelectMenu(eventId, role) {
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`weapon_${role ? role.toLowerCase() : 'none'}_${eventId}`);
@@ -53,11 +71,10 @@ function buildWeaponSelectMenu(eventId, role) {
 }
 
 function buildEventMessage(event, signups = [], currentRole = null) {
-  // Tiêu đề IN HOA toàn bộ, nằm trực tiếp ở tiêu đề Embed, cực kỳ sạch sẽ và chuyên nghiệp
   const uppercaseTitle = (event.title || '').toUpperCase();
 
   const embed = new EmbedBuilder()
-    .setColor(0xAA8833) // Vàng Đồng Albion
+    .setColor(0xAA8833)
     .setTitle(`⚔️ [ ${uppercaseTitle} ] ⚔️`);
 
   if (event.description) {
@@ -67,7 +84,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
 
-  // Lọc danh sách đăng ký theo từng Role
+  // Lọc danh sách đăng ký theo từng Role và hiển thị kèm Emoji của vũ khí
   const roles = [
     { name: '🛡️ Tank', key: 'TANK' },
     { name: '⚔️ DPS', key: 'DPS' },
@@ -78,7 +95,10 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   for (const r of roles) {
     const list = signups.filter(s => s.role === r.key && s.status === 'attending');
     const valueStr = list.length > 0 
-      ? list.map(s => `• **${s.username}** ${s.job ? `(${s.job})` : ''}`).join('\n')
+      ? list.map(s => {
+          const weaponEmoji = s.job && WEAPON_EMOJIS[s.job] ? `${WEAPON_EMOJIS[s.job]} ` : '';
+          return `• **${s.username}** ${s.job ? `(${weaponEmoji}${s.job})` : ''}`;
+        }).join('\n')
       : '_Trống_';
     
     embed.addFields({ name: `${r.name} (${list.length})`, value: valueStr, inline: true });

@@ -22,6 +22,7 @@ const ID = {
   STATUS_PREFIX: 'evt:status:', // evt:status:<statusKey>
   LEAVE: 'evt:leave',
   JOB_SELECT: 'evt:job',
+  ROLE_JOB_SELECT_PREFIX: 'evt:rolejob:', // evt:rolejob:<eventId>:<roleKey>
   EDIT_PREFIX: 'evt:edit:', // evt:edit:<eventId>
   EDIT_LINKS_PREFIX: 'evt:editlinks:', // evt:editlinks:<eventId>
   EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
@@ -40,25 +41,19 @@ const SUG = {
 const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
 const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
 
-// Render a short title with spaced-out letters for the clean "S K Y  G O D S"
-// look (embed titles are already shown bold by Discord). Plain spacing renders
-// reliably on every client — unlike emoji block letters, which tofu on some.
-// Long titles are left untouched so they don't wrap awkwardly.
 function blockifyTitle(title) {
   const text = String(title || '').trim();
   if (!text || text.length > 28) return text;
   return [...text.toUpperCase()]
-    .map((ch) => (ch === ' ' ? '\u2002' : ch)) // en-space between words
-    .join('\u2009'); // thin space between letters
+    .map((ch) => (ch === ' ' ? '\u2002' : ch))
+    .join('\u2009');
 }
 
-// An event is "expired" once its scheduled end (start + duration) has passed.
 function isExpired(event) {
   const end = event.start_ts + (event.duration_min || 120) * 60;
   return Math.floor(Date.now() / 1000) >= end;
 }
 
-// "`3` ⚔️ Name" — slot number, role icon (custom if available), display name.
 function formatMember(s, slot, guildId) {
   let roleIcon = '';
   if (s.role) {
@@ -75,11 +70,9 @@ function buildEmbed(event, signups) {
   const closed = event.status === 'closed';
   const expired = isExpired(event);
 
-  // Stable slot number per user, in signup order across all statuses.
   const slot = new Map();
   signups.forEach((s, i) => slot.set(s.user_id, i + 1));
 
-  // Expired events go red, closed (but not yet past) go grey, upcoming blurple.
   const color = expired ? 0xed4245 : closed ? 0x95a5a6 : 0x5865f2;
   const titlePrefix = closed ? '🔒 ' : expired ? '🔴 ' : '';
   const embed = new EmbedBuilder()
@@ -89,7 +82,7 @@ function buildEmbed(event, signups) {
 
   // ---- Header / description block ----
   const cap = event.cap || 0;
-  const GAP = '\u2003\u2003'; // wide gap to fake columns in the description
+  const GAP = '\u2003\u2003';
   const roleCounts = ROLE_GROUPS.map((g) => {
     const n = attending.filter((s) => g.keys.includes(s.role)).length;
     const icon = roleEmojiMention(event.guild_id, g.icons) || g.emoji;
@@ -103,28 +96,23 @@ function buildEmbed(event, signups) {
   if (event.description) lines.push(event.description);
   lines.push('');
 
-  // Row 1: leader + headcount.
   const topBits = [];
   if (event.leader || event.creator_name) topBits.push(`🏳️ **${event.leader || event.creator_name}**`);
   topBits.push(`👥 **${head}**${tentSuffix}`);
   lines.push(topBits.join(GAP));
 
-  // Row 2: date · time · countdown.
   lines.push(
     [`🗓️ ${discordTime(event.start_ts, 'D')}`, `🕒 ${discordTime(event.start_ts, 't')}`, `⏳ ${discordRelative(event.start_ts)}`].join(GAP),
   );
 
-  // Row 3: role breakdown on its own line.
   lines.push('');
   lines.push(roleCounts);
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
-  // ---- Standby split (overflow beyond cap), by signup order ----
   const main = cap ? attending.slice(0, cap) : attending;
   const standby = cap ? attending.slice(cap) : [];
 
-  // ---- One column per Job that has attendees ----
   for (const job of JOBS) {
     const members = main.filter((s) => s.job === job.code);
     if (!members.length) continue;
@@ -136,7 +124,6 @@ function buildEmbed(event, signups) {
     });
   }
 
-  // Attending but no Job chosen yet.
   const noJob = main.filter((s) => !s.job);
   if (noJob.length) {
     embed.addFields({
@@ -156,7 +143,6 @@ function buildEmbed(event, signups) {
     });
   }
 
-  // ---- Tentative / Absence: compact single-line lists ----
   const inlineList = (arr) =>
     arr.map((s) => `\`${slot.get(s.user_id)}\` ${s.username}`).join(', ');
   const statusBlock = [];
@@ -166,7 +152,6 @@ function buildEmbed(event, signups) {
     embed.addFields({ name: '\u200b', value: statusBlock.join('\n'), inline: false });
   }
 
-  // ---- Footer link row (Add to Google Calendar) ----
   const gcal = googleCalendarLink({
     title: event.title,
     startTs: event.start_ts,
@@ -185,9 +170,11 @@ function buildEmbed(event, signups) {
   return embed;
 }
 
+// BUILD COMPONENTS CHÍNH (Chỉ giữ 2 hàng nút bấm sạch đẹp)
 function buildComponents(event) {
   if (event.status === 'closed') return [];
 
+  // Hàng 1: 4 nút bấm vai trò (Tank, DPS, Healer, Support)
   const roleRow = new ActionRowBuilder().addComponents(
     ...MAIN_ROLE_BUTTONS.map((b) => {
       const customId = b.kind === 'dps' ? ID.DPS_OPEN : `${ID.ROLE_PREFIX}${b.key}`;
@@ -199,6 +186,7 @@ function buildComponents(event) {
     }),
   );
 
+  // Hàng 2: Nút trạng thái bổ trợ
   const statusRow = new ActionRowBuilder().addComponents(
     ...EXTRA_STATUSES.map((s) =>
       new ButtonBuilder()
@@ -219,26 +207,29 @@ function buildComponents(event) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  const jobRow = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(ID.JOB_SELECT)
-      .setPlaceholder('Select your Job')
-      .addOptions(
-        JOBS.map((j) => {
-          const option = { label: `${j.name} (${j.code})`, value: j.code };
-          const custom = jobEmojiComponent(event.guild_id, j.code);
-          if (custom) option.emoji = custom;
-          return option;
-        }),
-      ),
-  );
-
-  return [roleRow, statusRow, jobRow];
+  return [roleRow, statusRow];
 }
 
-// Ephemeral DPS subtype picker shown when a member clicks the DPS button.
-// Each button carries the eventId so it works from an untracked ephemeral
-// message: evt:dpsset:<eventId>:<roleKey>.
+// HÀM MỚI: Bật Select Menu chứa danh sách Jobs thuộc vai trò đã chọn (mở dạng tin nhắn ẩn - Ephemeral)
+function buildRoleJobPicker(event, roleKey) {
+  const roleGroup = ROLE_GROUPS.find((g) => g.keys.includes(roleKey) || g.label.toLowerCase() === roleKey.toLowerCase());
+  const filteredJobs = JOBS.filter((j) => (roleGroup ? roleGroup.keys.includes(j.group) || j.group.toLowerCase() === roleGroup.label.toLowerCase() : true));
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`${ID.ROLE_JOB_SELECT_PREFIX}${event.id}:${roleKey}`)
+    .setPlaceholder(`Chọn Job ${roleKey} của bạn...`)
+    .addOptions(
+      filteredJobs.map((j) => {
+        const option = { label: `${j.name} (${j.code})`, value: j.code };
+        const custom = jobEmojiComponent(event.guild_id, j.code);
+        if (custom) option.emoji = custom;
+        return option;
+      }),
+    );
+
+  return [new ActionRowBuilder().addComponents(selectMenu)];
+}
+
 function buildDpsPicker(event) {
   const row = new ActionRowBuilder().addComponents(
     ...DPS_ROLES.map((role) =>
@@ -252,9 +243,6 @@ function buildDpsPicker(event) {
   return [row];
 }
 
-// Private (ephemeral) control panel buttons for the creator / leader.
-// The eventId is embedded in the customId so the buttons work from an
-// ephemeral message that isn't tracked in the database.
 function buildManageComponents(event) {
   return [
     new ActionRowBuilder().addComponents(
@@ -272,7 +260,6 @@ function buildManageComponents(event) {
   ];
 }
 
-// Modal shown to the creator/leader to edit the headline event fields.
 function buildEditModal(event) {
   const { date, time } = formatLocalParts(event.start_ts, event.timezone);
 
@@ -324,7 +311,6 @@ function buildEditModal(event) {
     );
 }
 
-// Modal for description, event link, and image/banner URL.
 function buildEditLinksModal(event) {
   const descInput = new TextInputBuilder()
     .setCustomId('description')
@@ -365,9 +351,6 @@ function buildEventMessage(event, signups) {
   };
 }
 
-// ---- Suggestion box --------------------------------------------------------
-
-// Modal a member fills in to submit an improvement idea.
 function buildSuggestModal() {
   const input = new TextInputBuilder()
     .setCustomId(SUG.INPUT)
@@ -383,7 +366,6 @@ function buildSuggestModal() {
     .addComponents(new ActionRowBuilder().addComponents(input));
 }
 
-// The persistent "Suggest an improvement" button row.
 function buildSuggestButtonRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -394,7 +376,6 @@ function buildSuggestButtonRow() {
   );
 }
 
-// A standing message members can use any time to drop suggestions.
 function buildSuggestBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0xf1c40f)
@@ -408,7 +389,6 @@ function buildSuggestBoardMessage() {
   return { embeds: [embed], components: [buildSuggestButtonRow()] };
 }
 
-// Ephemeral list of suggestions for organizers.
 function buildSuggestionList(rows, { status } = {}) {
   const label = status ? `${status} ` : '';
   if (!rows.length) {
@@ -425,10 +405,6 @@ function buildSuggestionList(rows, { status } = {}) {
   return [header, ...lines].join('\n') + more;
 }
 
-// ---- Event creation board (GUI for creating events) -------------------------
-
-// A standing message with a "Create Event" button — anyone with Manage Events
-// can click it and fill in a form to post a new event, no slash command needed.
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -451,7 +427,6 @@ function buildCreateBoardMessage() {
   return { embeds: [embed], components: [row] };
 }
 
-// Modal shown when a user clicks "Create Event" on the board.
 function buildCreateModal() {
   const titleInput = new TextInputBuilder()
     .setCustomId('title')
@@ -491,30 +466,4 @@ function buildCreateModal() {
     .setPlaceholder('e.g. PST, EST, CST, MST (blank = your saved tz)');
 
   return new ModalBuilder()
-    .setCustomId(ID.CREATE_MODAL)
-    .setTitle('📅 Create Event')
-    .addComponents(
-      new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(dateInput),
-      new ActionRowBuilder().addComponents(timeInput),
-      new ActionRowBuilder().addComponents(descInput),
-      new ActionRowBuilder().addComponents(tzInput),
-    );
-}
-
-module.exports = {
-  ID,
-  SUG,
-  isExpired,
-  buildEventMessage,
-  buildManageComponents,
-  buildDpsPicker,
-  buildEditModal,
-  buildEditLinksModal,
-  buildCreateBoardMessage,
-  buildCreateModal,
-  buildSuggestModal,
-  buildSuggestButtonRow,
-  buildSuggestBoardMessage,
-  buildSuggestionList,
-};
+    .setCustomId(ID.CREATE

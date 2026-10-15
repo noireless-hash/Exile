@@ -1,7 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
-// Bản đồ tra cứu Custom Emoji chuẩn từ các ảnh bạn vừa tải lên server Discord
+// Bản đồ tra cứu Custom Emoji chuẩn từ các ảnh bạn đã tải lên server Discord
 const WEAPON_EMOJIS = {
   'Dreadstorm Monarch': '<:EldersDreadstormMonarch:1560414109680541797>',
   'Heavy Mace': '<:EldersHeavyMace:1560414517995901138>',
@@ -119,7 +119,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  // Đã sửa lại tham số truyền vào đúng chuẩn currentRole
   const row3 = buildWeaponSelectMenu(event.id, currentRole);
 
   return {

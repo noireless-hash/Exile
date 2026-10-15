@@ -73,10 +73,12 @@ function buildEmbed(event, signups) {
   const slot = new Map();
   signups.forEach((s, i) => slot.set(s.user_id, i + 1));
 
-  const color = expired ? 0xed4245 : closed ? 0x95a5a6 : 0x5865f2;
+  // Áp dụng mã màu #aa8833 (0xAA8833) cho viền Embed khi Event đang diễn ra
+  const color = expired ? 0xed4245 : closed ? 0x95a5a6 : 0xAA8833;
   const titlePrefix = closed ? '🔒 ' : expired ? '🔴 ' : '';
+  
   const embed = new EmbedBuilder()
-    .setTitle(`${titlePrefix}${blockifyTitle(event.title)}`)
+    .setTitle(`${titlePrefix}👑 ${blockifyTitle(event.title)}`)
     .setColor(color);
   if (event.image_url) embed.setImage(event.image_url);
 
@@ -92,6 +94,10 @@ function buildEmbed(event, signups) {
   const tentSuffix = tentative.length ? ` (+${tentative.length} dự bị)` : '';
 
   const lines = [];
+
+  // KHỐI TIÊU ĐỀ MÀU GOLD VỚI CÚ PHÁP FIX CODEBLOCK
+  lines.push(`\`\`\`fix\n👑 ${String(event.title || '').toUpperCase()}\n\`\`\``);
+
   if (event.url) lines.push(event.url);
   if (event.description) lines.push(event.description);
   lines.push('');
@@ -101,7 +107,7 @@ function buildEmbed(event, signups) {
   topBits.push(`👥 **${head}**${tentSuffix}`);
   lines.push(topBits.join(GAP));
 
-  // CHỈ HIỂN THỊ GIỜ HẸN (NỔI BẬT VỚI BOX MÀU CAM)
+  // GIỜ HẸN NỔI BẬT TRONG KHỐI FIX CODEBLOCK
   lines.push(`\n# 🕒 **GIỜ HẸN**\n\`\`\`fix\n${discordTime(event.start_ts, 't')}\n\`\`\``);
 
   lines.push('');
@@ -109,7 +115,7 @@ function buildEmbed(event, signups) {
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
-  // Hiển thị TOÀN BỘ người tham gia, không giới hạn danh sách (No Standby)
+  // Hiển thị danh sách không giới hạn
   for (const job of JOBS) {
     const members = attending.filter((s) => s.job === job.code);
     if (!members.length) continue;
@@ -371,7 +377,7 @@ function buildSuggestButtonRow() {
 
 function buildSuggestBoardMessage() {
   const embed = new EmbedBuilder()
-    .setColor(0xf1c40f)
+    .setColor(0xAA8833)
     .setTitle('💡 Suggestion Box')
     .setDescription(
       [
@@ -400,7 +406,7 @@ function buildSuggestionList(rows, { status } = {}) {
 
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
+    .setColor(0xAA8833)
     .setTitle('📅 Tạo Event Mới')
     .setDescription(
       [

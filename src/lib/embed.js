@@ -11,7 +11,7 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' },
+        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' }, // Đã thêm emoji
         { label: 'Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn', emoji: '🦇' },
         { label: 'Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng', emoji: '⚓' },
         { label: 'Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê', emoji: '🛡️' },
@@ -53,13 +53,13 @@ function buildWeaponSelectMenu(eventId, role) {
 }
 
 function buildEventMessage(event, signups = [], currentRole = null) {
-  // Tiêu đề IN HOA toàn bộ, chữ to (Header level 1) và căn giữa trong Description
+  // Tiêu đề IN HOA toàn bộ, căn giữa bằng cách tối ưu khoảng trắng và khung đường kẻ
   const uppercaseTitle = (event.title || '').toUpperCase();
-  const formattedHeader = `# ═════════════════════════\n# 🏰  ${uppercaseTitle}  🏰\n# ═════════════════════════`;
+  const titleBlock = `\`\`\`fix\n       🏰 ${uppercaseTitle} 🏰       \`\`\``;
 
   const embed = new EmbedBuilder()
-    .setColor(0xAA8833) // Màu Vàng Đồng sang trọng
-    .setDescription(`${formattedHeader}${event.description ? `\n\n${event.description}` : ''}`);
+    .setColor(0xAA8833) // Màu Vàng Đồng Albion
+    .setDescription(`${titleBlock}${event.description ? `\n*${event.description}*\n` : ''}`);
 
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
@@ -94,7 +94,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  // 3 Hàng Nút Bấm & Select Menu
+  // 3 Hàng Tương Tác Nút Bấm & Select Menu
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
     new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),

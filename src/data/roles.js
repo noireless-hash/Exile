@@ -1,30 +1,4 @@
-// Khai báo danh sách FFXI Jobs trực tiếp trong file roles để tránh lỗi thiếu biến
-const JOBS = [
-  // Tank
-  { code: 'PLD', name: 'Paladin', emoji: '🛡️', group: 'Tank' },
-  { code: 'NIN', name: 'Ninja', emoji: '🥷', group: 'Tank' },
-
-  // DPS
-  { code: 'WAR', name: 'Warrior', emoji: '🪓', group: 'DPS' },
-  { code: 'MNK', name: 'Monk', emoji: '👊', group: 'DPS' },
-  { code: 'BLM', name: 'Black Mage', emoji: '🔥', group: 'DPS' },
-  { code: 'DRK', name: 'Dark Knight', emoji: '🌑', group: 'DPS' },
-  { code: 'BST', name: 'Beastmaster', emoji: '🐺', group: 'DPS' },
-  { code: 'RNG', name: 'Ranger', emoji: '🏹', group: 'DPS' },
-  { code: 'SAM', name: 'Samurai', emoji: '🗡️', group: 'DPS' },
-  { code: 'DRG', name: 'Dragoon', emoji: '🐉', group: 'DPS' },
-
-  // Healer
-  { code: 'WHM', name: 'White Mage', emoji: '⛅', group: 'Healer' },
-
-  // Support
-  { code: 'RDM', name: 'Red Mage', emoji: '🌹', group: 'Support' },
-  { code: 'BRD', name: 'Bard', emoji: '🎵', group: 'Support' },
-  { code: 'SMN', name: 'Summoner', emoji: '🔮', group: 'Support' },
-  { code: 'THF', name: 'Thief', emoji: '🗝️', group: 'Support' },
-];
-
-// Attending roles (dùng cho phân loại/thống kê)
+// Attending roles (mutually exclusive per member) and non-attending statuses.
 const ROLES = [
   { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
   { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
@@ -35,14 +9,13 @@ const ROLES = [
 const LEGACY_ROLES = [];
 const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
-// Đưa danh sách JOBS thành nút bấm chính để tránh lỗi ActionRow rỗng của Discord API
-const MAIN_ROLE_BUTTONS = JOBS.map((job) => ({
-  kind: 'role',
-  key: job.code,
-  label: job.name,
-  emoji: job.emoji,
-  icons: [job.code],
-}));
+// Khôi phục lại 4 nút bấm chính ban đầu (Tank, DPS, Healer, Support)
+const MAIN_ROLE_BUTTONS = [
+  { kind: 'role', key: 'Tank', label: 'Tank', emoji: '🛡️', icons: ['Tank'] },
+  { kind: 'role', key: 'DPS', label: 'DPS', emoji: '⚔️', icons: ['DPS'] },
+  { kind: 'role', key: 'Healer', label: 'Healer', emoji: '♻️', icons: ['Healer'] },
+  { kind: 'role', key: 'Support', label: 'Support', emoji: '🚸', icons: ['Support'] },
+];
 
 const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
 
@@ -65,7 +38,6 @@ const EXTRA_STATUSES = [
 ];
 
 module.exports = {
-  JOBS,
   ROLES,
   LEGACY_ROLES,
   ROLE_BY_KEY,

@@ -1,30 +1,76 @@
-// Attending roles (mutually exclusive per member) and non-attending statuses.
-const ROLES = [
-  { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
-  { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
-  { key: 'Healer', label: 'Healer', emoji: '♻️', group: 'Healer', icons: ['Healer'] },
-  { key: 'Support', label: 'Support', emoji: '🚸', group: 'Support', icons: ['Support'] },
+// 1. Định nghĩa sẵn danh sách Job tương ứng cho từng nhóm
+const ROLE_GROUPS = [
+  { 
+    key: 'Tank', 
+    label: 'Tank', 
+    emoji: '🛡️', 
+    icons: ['Tank'], 
+    jobs: [
+      { code: 'PLD', name: 'Paladin', emoji: '🛡️' },
+      { code: 'NIN', name: 'Ninja', emoji: '🥷' }
+    ]
+  },
+  { 
+    key: 'DPS', 
+    label: 'DPS', 
+    emoji: '⚔️', 
+    icons: ['DPS'], 
+    jobs: [
+      { code: 'WAR', name: 'Warrior', emoji: '🪓' },
+      { code: 'MNK', name: 'Monk', emoji: '👊' },
+      { code: 'BLM', name: 'Black Mage', emoji: '🔥' },
+      { code: 'DRK', name: 'Dark Knight', emoji: '🌑' },
+      { code: 'BST', name: 'Beastmaster', emoji: '🐺' },
+      { code: 'RNG', name: 'Ranger', emoji: '🏹' },
+      { code: 'SAM', name: 'Samurai', emoji: '🗡️' },
+      { code: 'DRG', name: 'Dragoon', emoji: '🐉' }
+    ]
+  },
+  { 
+    key: 'Healer', 
+    label: 'Healer', 
+    emoji: '♻️', 
+    icons: ['Healer'], 
+    jobs: [
+      { code: 'WHM', name: 'White Mage', emoji: '⛅' }
+    ]
+  },
+  { 
+    key: 'Support', 
+    label: 'Support', 
+    emoji: '🚸', 
+    icons: ['Support'], 
+    jobs: [
+      { code: 'RDM', name: 'Red Mage', emoji: '🌹' },
+      { code: 'BRD', name: 'Bard', emoji: '🎵' },
+      { code: 'SMN', name: 'Summoner', emoji: '🔮' },
+      { code: 'THF', name: 'Thief', emoji: '🗝️' }
+    ]
+  },
 ];
+
+const ROLES = ROLE_GROUPS.map(g => ({
+  key: g.key,
+  label: g.label,
+  emoji: g.emoji,
+  group: g.key,
+  icons: g.icons
+}));
 
 const LEGACY_ROLES = [];
 const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
-// Khôi phục lại 4 nút bấm chính ban đầu (Tank, DPS, Healer, Support)
-const MAIN_ROLE_BUTTONS = [
-  { kind: 'role', key: 'Tank', label: 'Tank', emoji: '🛡️', icons: ['Tank'] },
-  { kind: 'role', key: 'DPS', label: 'DPS', emoji: '⚔️', icons: ['DPS'] },
-  { kind: 'role', key: 'Healer', label: 'Healer', emoji: '♻️', icons: ['Healer'] },
-  { kind: 'role', key: 'Support', label: 'Support', emoji: '🚸', icons: ['Support'] },
-];
+// 2. Tạo đúng 4 nút bấm chính cho 4 nhóm (Nằm gọn trên 1 hàng duy nhất)
+const MAIN_ROLE_BUTTONS = ROLE_GROUPS.map((group) => ({
+  kind: 'role',
+  key: group.key,
+  label: group.label,
+  emoji: group.emoji,
+  icons: group.icons,
+  jobs: group.jobs // Gắn kèm danh sách job vào nút để phần code tương tác (interaction) gọi ra menu
+}));
 
 const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
-
-const ROLE_GROUPS = [
-  { label: 'Tank', emoji: '🛡️', icons: ['Tank'], keys: ['Tank'] },
-  { label: 'DPS', emoji: '⚔️', icons: ['DPS'], keys: ['DPS'] },
-  { label: 'Healer', emoji: '♻️', icons: ['Healer'], keys: ['Healer'] },
-  { label: 'Support', emoji: '🚸', icons: ['Support'], keys: ['Support'] },
-];
 
 const STATUS = {
   ATTENDING: 'attending',

@@ -324,4 +324,179 @@ function getPopList(id) {
 
 const getPopListByMessageStmt = db.prepare('SELECT * FROM pop_lists WHERE message_id = ?');
 function getPopListByMessage(messageId) {
-  return getPopListByMessage
+  return getPopListByMessageStmt.get(messageId) || null;
+}
+
+const setPopListMessageStmt = db.prepare('UPDATE pop_lists SET message_id = ? WHERE id = ?');
+function setPopListMessage(id, messageId) {
+  setPopListMessageStmt.run(messageId, id);
+}
+
+const getPopMarksStmt = db.prepare('SELECT * FROM pop_marks WHERE list_id = ?');
+function getPopMarks(listId) {
+  return getPopMarksStmt.all(listId);
+}
+
+const getUserPopMarksStmt = db.prepare(
+  'SELECT item_key FROM pop_marks WHERE list_id = ? AND user_id = ?',
+);
+function getUserPopMarks(listId, userId) {
+  return getUserPopMarksStmt.all(listId, userId).map((r) => r.item_key);
+}
+
+const insertPopMarkStmt = db.prepare(`
+  INSERT OR IGNORE INTO pop_marks (list_id, item_key, user_id, username, marked_at)
+  VALUES (?, ?, ?, ?, ?)
+`);
+const deleteUserPopMarksStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ? AND user_id = ?');
+
+function setUserPopMarks(listId, userId, username, itemKeys) {
+  deleteUserPopMarksStmt.run(listId, userId);
+  const ts = now();
+  for (const key of itemKeys) {
+    insertPopMarkStmt.run(listId, key, userId, username, ts);
+  }
+}
+
+const deletePopListStmt = db.prepare('DELETE FROM pop_lists WHERE id = ?');
+const deletePopMarksForListStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ?');
+function deletePopList(id) {
+  deletePopMarksForListStmt.run(id);
+  deletePopListStmt.run(id);
+}
+
+function resetPopList(id) {
+  deletePopMarksForListStmt.run(id);
+}
+
+// ---- Suggestions -----------------------------------------------------------
+const insertSuggestionStmt = db.prepare(`
+  INSERT INTO suggestions (guild_id, user_id, username, text, status, created_at)
+  VALUES (?, ?, ?, ?, 'open', ?)
+`);
+function addSuggestion({ guildId, userId, username, text }) {
+  const result = insertSuggestionStmt.run(guildId ?? null, userId, username, text, now());
+  return getSuggestion(Number(result.lastInsertRowid));
+}
+
+const getSuggestionStmt = db.prepare('SELECT * FROM suggestions WHERE id = ?');
+function getSuggestion(id) {
+  return getSuggestionStmt.get(id) || null;
+}
+
+const getSuggestionsAllStmt = db.prepare(
+  'SELECT * FROM suggestions WHERE guild_id = ? ORDER BY created_at DESC, id DESC',
+);
+const getSuggestionsByStatusStmt = db.prepare(
+  'SELECT * FROM suggestions WHERE guild_id = ? AND status = ? ORDER BY created_at DESC, id DESC',
+);
+function getSuggestions(guildId, status) {
+  return status
+    ? getSuggestionsByStatusStmt.all(guildId, status)
+    : getSuggestionsAllStmt.all(guildId);
+}
+
+const setSuggestionStatusStmt = db.prepare('UPDATE suggestions SET status = ? WHERE id = ?');
+function setSuggestionStatus(id, status) {
+  setSuggestionStatusStmt.run(status, id);
+  return getSuggestion(id);
+}
+
+// ---- User preferences ------------------------------------------------------
+
+const getUserTimezoneStmt = db.prepare('SELECT timezone FROM user_prefs WHERE user_id = ?');
+function getUserTimezone(userId) {
+  return getUserTimezoneStmt.get(userId)?.timezone || null;
+}
+
+const setUserTimezoneStmt = db.prepare(`
+  INSERT INTO user_prefs (user_id, timezone) VALUES (?, ?)
+  ON CONFLICT(user_id) DO UPDATE SET timezone = excluded.timezone
+`);
+function setUserTimezone(userId, timezone) {
+  setUserTimezoneStmt.run(userId, timezone);
+}
+
+// ---- Calendar queries -------------------------------------------------------
+const getEventsByRangeStmt = db.prepare(
+  'SELECT * FROM events WHERE guild_id = ? AND start_ts >= ? AND start_ts < ? ORDER BY start_ts ASC',
+);
+function getEventsByRange(guildId, startTs, endTs) {
+  return getEventsByRangeStmt.all(guildId, startTs, endTs);
+}
+
+// ---- Generic settings KV ---------------------------------------------------
+const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
+function getSetting(key, fallback = null) {
+  const row = getSettingStmt.get(key);
+  return row ? row.value : fallback;
+}
+
+const setSettingStmt = db.prepare(`
+  INSERT INTO settings (key, value) VALUES (?, ?)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value
+`);
+function setSetting(key, value) {
+  setSettingStmt.run(key, String(value));
+}
+
+// ---- Calendar posts (auto-updating) ----------------------------------------
+const insertCalendarPostStmt = db.prepare(`
+  INSERT INTO calendar_posts (guild_id, channel_id, message_id, timezone, created_at)
+  VALUES (?, ?, ?, ?, ?)
+`);
+function addCalendarPost({ guildId, channelId, messageId, timezone }) {
+  insertCalendarPostStmt.run(guildId, channelId, messageId, timezone, now());
+}
+
+const getCalendarPostsStmt = db.prepare(
+  'SELECT * FROM calendar_posts WHERE guild_id = ?',
+);
+function getCalendarPosts(guildId) {
+  return getCalendarPostsStmt.all(guildId);
+}
+
+const deleteCalendarPostStmt = db.prepare('DELETE FROM calendar_posts WHERE id = ?');
+function deleteCalendarPost(id) {
+  deleteCalendarPostStmt.run(id);
+}
+
+module.exports = {
+  db,
+  createEvent,
+  getEvent,
+  getEventByMessage,
+  setEventMessage,
+  setEventStatus,
+  updateEvent,
+  deleteEvent,
+  getDueReminders,
+  markReminderSent,
+  getJustExpired,
+  markExpiredRendered,
+  getEventsByRange,
+  getSignup,
+  getSignups,
+  upsertSignup,
+  removeSignup,
+  getUserTimezone,
+  setUserTimezone,
+  getSetting,
+  setSetting,
+  addSuggestion,
+  getSuggestion,
+  getSuggestions,
+  setSuggestionStatus,
+  addCalendarPost,
+  getCalendarPosts,
+  deleteCalendarPost,
+  createPopList,
+  getPopList,
+  getPopListByMessage,
+  setPopListMessage,
+  getPopMarks,
+  getUserPopMarks,
+  setUserPopMarks,
+  deletePopList,
+  resetPopList,
+};

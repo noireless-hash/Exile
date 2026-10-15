@@ -6,48 +6,50 @@ const { discordTime, googleCalendarLink } = require('./time');
  */
 function buildWeaponSelectMenu(eventId, role) {
   const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`weapon_${role.toLowerCase()}_${eventId}`);
+    .setCustomId(`weapon_${role ? role.toLowerCase() : 'none'}_${eventId}`);
 
-  if (role === 'TANK') {
+  const roleUpper = role ? role.toUpperCase() : null;
+
+  if (roleUpper === 'TANK') {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
         { label: '🛡️ Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực' },
         { label: '🦇 Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn' },
-        { label: '⚓ Albion Hammer', value: 'Bridgebreaker / Great Hammer', description: 'Khống chế diện rộng' },
+        { label: '⚓ Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng' },
         { label: '🛡️ Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê' },
       ]);
-  } else if (role === 'DPS') {
+  } else if (roleUpper === 'DPS') {
     selectMenu
       .setPlaceholder('⚔️ Chọn Vũ khí DPS của bạn...')
       .addOptions([
-        { label: '🔥 1H Fire / Wildfire', value: 'Fire Staff', description: 'Sơ đồ sát thương diện rộng lớn' },
-        { label: '❄️ Permafrost / Great Frost', value: 'Frost Staff', description: 'Làm chậm & Dồn sát thương băng' },
+        { label: '🔥 1H Fire / Wildfire', value: 'Fire Staff', description: 'Sát thương diện rộng lớn' },
+        { label: '❄️ Permafrost / Great Frost', value: 'Frost Staff', description: 'Làm chậm & dồn sát thương' },
         { label: '🏹 Badon / Longbow', value: 'Bow', description: 'Sát thương tầm xa liên tục' },
         { label: '⚡ Energy Shaper / Crossbow', value: 'Crossbow', description: 'Sát thương dồn cực mạnh' },
         { label: '🗡️ Bloodletter / Carving', value: 'Melee DPS', description: 'Cận chiến cơ động / Cắt giáp' },
       ]);
-  } else if (role === 'HEALER') {
+  } else if (roleUpper === 'HEALER') {
     selectMenu
       .setPlaceholder('🌿 Chọn Vũ khí Healer của bạn...')
       .addOptions([
-        { label: '🌿 1H Holy / Hallowfall', value: 'Holy Healer', description: 'Hồi máu nhóm cực mạnh & Cơ động' },
+        { label: '🌿 1H Holy / Hallowfall', value: 'Holy Healer', description: 'Hồi máu nhóm cực mạnh & cơ động' },
         { label: '🍃 Great Nature / Blight Staff', value: 'Nature Healer', description: 'Hồi máu theo thời gian (HoT)' },
         { label: '✨ Fallen Staff', value: 'Fallen Staff', description: 'Hồi máu diện rộng diện tích lớn' },
       ]);
-  } else if (role === 'SUPPORT') {
+  } else if (roleUpper === 'SUPPORT') {
     selectMenu
       .setPlaceholder('⚡ Chọn Vũ khí Support của bạn...')
       .addOptions([
-        { label: '📯 Arcane (Occult / Great Arcane)', value: 'Arcane Support', description: 'Buff kháng & Tăng sát thương đồng minh' },
-        { label: '🕯️ Incubus / Rootbound', value: 'Utility Support', description: 'Khống chế & Hỗ trợ chiến thuật' },
+        { label: '📯 Arcane Staff', value: 'Arcane Support', description: 'Buff kháng & tăng sát thương' },
+        { label: '🕯️ Rootbound Staff', value: 'Utility Support', description: 'Khống chế & hỗ trợ chiến thuật' },
       ]);
   } else {
-    // Mặc định ban đầu nếu chưa chọn role cụ thể
+    // Mặc định khi vừa tạo event chưa chọn role
     selectMenu
-      .setPlaceholder('🎯 Chọn Role bên trên trước, sau đó chọn Vũ khí...')
+      .setPlaceholder('🎯 Chọn Role (Tank/DPS/Healer/Support) để hiện danh sách Vũ khí...')
       .addOptions([
-        { label: 'ℹ️ Hướng dẫn', value: 'help', description: 'Vui lòng bấm nút Tank/DPS/Healer/Support trước' }
+        { label: 'ℹ️ Hướng dẫn', value: 'guide', description: 'Vui lòng bấm nút Tank, DPS, Healer hoặc Support ở trên' }
       ]);
   }
 
@@ -98,7 +100,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  // Hàng 3: Menu chọn vũ khí động thay đổi theo Role người dùng vừa chọn
+  // Hàng 3: Menu chọn vũ khí động theo Role vừa chọn
   const row3 = buildWeaponSelectMenu(event.id, currentRole);
 
   return {

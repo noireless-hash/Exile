@@ -80,13 +80,13 @@ db.exec(`
 // Player-submitted improvement suggestions for the bot / events.
 db.exec(`
   CREATE TABLE IF NOT EXISTS suggestions (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id   TEXT,
-    user_id    TEXT NOT NULL,
-    username   TEXT NOT NULL,
-    text       TEXT NOT NULL,
-    status     TEXT NOT NULL DEFAULT 'open',
-    created_at INTEGER NOT NULL
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id     TEXT,
+    user_id      TEXT NOT NULL,
+    username     TEXT NOT NULL,
+    text         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'open',
+    created_at   INTEGER NOT NULL
   );
 `);
 
@@ -94,14 +94,14 @@ db.exec(`
 // "sky"); pop_marks records which items each player has ticked.
 db.exec(`
   CREATE TABLE IF NOT EXISTS pop_lists (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id   TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    message_id TEXT,
-    creator_id TEXT NOT NULL,
-    template   TEXT NOT NULL,
-    title      TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id     TEXT NOT NULL,
+    channel_id   TEXT NOT NULL,
+    message_id   TEXT,
+    creator_id   TEXT NOT NULL,
+    template     TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    created_at   INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS pop_marks (
@@ -118,8 +118,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_pop_marks_list ON pop_marks(list_id);
 `);
 
-// Generic key/value settings store for runtime-toggleable bot state (e.g. the
-// linkshell bridge's Discord->FFXI direction). Values are stored as TEXT.
+// Generic key/value settings store for runtime-toggleable bot state.
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -130,12 +129,12 @@ db.exec(`
 // Posted calendar messages that auto-update when events change.
 db.exec(`
   CREATE TABLE IF NOT EXISTS calendar_posts (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    guild_id   TEXT NOT NULL,
-    channel_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    timezone   TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id     TEXT NOT NULL,
+    channel_id   TEXT NOT NULL,
+    message_id   TEXT NOT NULL,
+    timezone     TEXT NOT NULL,
+    created_at   INTEGER NOT NULL
   );
 
   CREATE INDEX IF NOT EXISTS idx_calendar_posts_guild ON calendar_posts(guild_id);
@@ -153,34 +152,34 @@ const insertEventStmt = db.prepare(`
 `);
 
 function createEvent({
-  guildId,
-  channelId,
-  creatorId,
-  creatorName,
+  guild_id,
+  channel_id,
+  creator_id,
+  creator_name,
   leader,
   title,
   description,
-  startTs,
+  start_ts,
   timezone,
   url,
-  imageUrl,
+  image_url,
   cap,
-  durationMin,
+  duration_min,
 }) {
   const result = insertEventStmt.run(
-    guildId,
-    channelId,
-    creatorId,
-    creatorName ?? null,
+    guild_id,
+    channel_id,
+    creator_id,
+    creator_name ?? null,
     leader ?? null,
     title,
     description ?? null,
-    startTs,
+    start_ts,
     timezone,
     url ?? null,
-    imageUrl ?? null,
+    image_url ?? null,
     cap ?? null,
-    durationMin ?? 120,
+    duration_min ?? 120,
     now(),
   );
   return getEvent(Number(result.lastInsertRowid));
@@ -206,8 +205,6 @@ function setEventStatus(id, status) {
   setEventStatusStmt.run(status, id);
 }
 
-// Update a whitelisted set of event columns. Pass only the fields to change.
-// Changing start_ts resets reminder_sent so the reminder fires for the new time.
 const UPDATABLE_COLUMNS = new Set([
   'title',
   'description',
@@ -236,7 +233,6 @@ function deleteEvent(id) {
   deleteEventStmt.run(id);
 }
 
-// Events that are open, in the future, and due for a reminder within `windowSeconds`.
 const dueRemindersStmt = db.prepare(`
   SELECT * FROM events
   WHERE status = 'open'
@@ -254,8 +250,6 @@ function markReminderSent(id) {
   markReminderSentStmt.run(id);
 }
 
-// Events that have passed their end time (start + duration) and haven't yet been
-// re-rendered into their "expired" (red) state. Only those with a posted message.
 const justExpiredStmt = db.prepare(`
   SELECT * FROM events
   WHERE expired_rendered = 0
@@ -278,7 +272,6 @@ function getSignup(eventId, userId) {
   return getSignupStmt.get(eventId, userId) || null;
 }
 
-// Stable order: by first-signup time, falling back to updated_at for legacy rows.
 const getSignupsStmt = db.prepare(
   'SELECT * FROM signups WHERE event_id = ? ORDER BY COALESCE(created_at, updated_at) ASC, rowid ASC',
 );
@@ -297,8 +290,6 @@ const upsertSignupStmt = db.prepare(`
     updated_at = excluded.updated_at
 `);
 
-// Merge `changes` (role/job/status) onto any existing signup for this user.
-// created_at is set once on first signup and never changed (stable slot order).
 function upsertSignup(eventId, userId, username, changes) {
   const existing = getSignup(eventId, userId);
   const role = changes.role !== undefined ? changes.role : existing?.role ?? null;
@@ -333,181 +324,4 @@ function getPopList(id) {
 
 const getPopListByMessageStmt = db.prepare('SELECT * FROM pop_lists WHERE message_id = ?');
 function getPopListByMessage(messageId) {
-  return getPopListByMessageStmt.get(messageId) || null;
-}
-
-const setPopListMessageStmt = db.prepare('UPDATE pop_lists SET message_id = ? WHERE id = ?');
-function setPopListMessage(id, messageId) {
-  setPopListMessageStmt.run(messageId, id);
-}
-
-const getPopMarksStmt = db.prepare('SELECT * FROM pop_marks WHERE list_id = ?');
-function getPopMarks(listId) {
-  return getPopMarksStmt.all(listId);
-}
-
-const getUserPopMarksStmt = db.prepare(
-  'SELECT item_key FROM pop_marks WHERE list_id = ? AND user_id = ?',
-);
-function getUserPopMarks(listId, userId) {
-  return getUserPopMarksStmt.all(listId, userId).map((r) => r.item_key);
-}
-
-const insertPopMarkStmt = db.prepare(`
-  INSERT OR IGNORE INTO pop_marks (list_id, item_key, user_id, username, marked_at)
-  VALUES (?, ?, ?, ?, ?)
-`);
-const deleteUserPopMarksStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ? AND user_id = ?');
-
-// Replace a user's marks for this list with exactly `itemKeys`.
-function setUserPopMarks(listId, userId, username, itemKeys) {
-  deleteUserPopMarksStmt.run(listId, userId);
-  const ts = now();
-  for (const key of itemKeys) {
-    insertPopMarkStmt.run(listId, key, userId, username, ts);
-  }
-}
-
-const deletePopListStmt = db.prepare('DELETE FROM pop_lists WHERE id = ?');
-const deletePopMarksForListStmt = db.prepare('DELETE FROM pop_marks WHERE list_id = ?');
-function deletePopList(id) {
-  deletePopMarksForListStmt.run(id);
-  deletePopListStmt.run(id);
-}
-
-function resetPopList(id) {
-  deletePopMarksForListStmt.run(id);
-}
-
-// ---- Suggestions -----------------------------------------------------------
-const insertSuggestionStmt = db.prepare(`
-  INSERT INTO suggestions (guild_id, user_id, username, text, status, created_at)
-  VALUES (?, ?, ?, ?, 'open', ?)
-`);
-function addSuggestion({ guildId, userId, username, text }) {
-  const result = insertSuggestionStmt.run(guildId ?? null, userId, username, text, now());
-  return getSuggestion(Number(result.lastInsertRowid));
-}
-
-const getSuggestionStmt = db.prepare('SELECT * FROM suggestions WHERE id = ?');
-function getSuggestion(id) {
-  return getSuggestionStmt.get(id) || null;
-}
-
-const getSuggestionsAllStmt = db.prepare(
-  'SELECT * FROM suggestions WHERE guild_id = ? ORDER BY created_at DESC, id DESC',
-);
-const getSuggestionsByStatusStmt = db.prepare(
-  'SELECT * FROM suggestions WHERE guild_id = ? AND status = ? ORDER BY created_at DESC, id DESC',
-);
-function getSuggestions(guildId, status) {
-  return status
-    ? getSuggestionsByStatusStmt.all(guildId, status)
-    : getSuggestionsAllStmt.all(guildId);
-}
-
-const setSuggestionStatusStmt = db.prepare('UPDATE suggestions SET status = ? WHERE id = ?');
-function setSuggestionStatus(id, status) {
-  setSuggestionStatusStmt.run(status, id);
-  return getSuggestion(id);
-}
-
-// ---- User preferences ------------------------------------------------------
-
-const getUserTimezoneStmt = db.prepare('SELECT timezone FROM user_prefs WHERE user_id = ?');
-function getUserTimezone(userId) {
-  return getUserTimezoneStmt.get(userId)?.timezone || null;
-}
-
-const setUserTimezoneStmt = db.prepare(`
-  INSERT INTO user_prefs (user_id, timezone) VALUES (?, ?)
-  ON CONFLICT(user_id) DO UPDATE SET timezone = excluded.timezone
-`);
-function setUserTimezone(userId, timezone) {
-  setUserTimezoneStmt.run(userId, timezone);
-}
-
-// ---- Calendar queries -------------------------------------------------------
-// Get all events for a guild within a unix-timestamp range (inclusive).
-const getEventsByRangeStmt = db.prepare(
-  'SELECT * FROM events WHERE guild_id = ? AND start_ts >= ? AND start_ts < ? ORDER BY start_ts ASC',
-);
-function getEventsByRange(guildId, startTs, endTs) {
-  return getEventsByRangeStmt.all(guildId, startTs, endTs);
-}
-
-// ---- Generic settings KV ---------------------------------------------------
-const getSettingStmt = db.prepare('SELECT value FROM settings WHERE key = ?');
-function getSetting(key, fallback = null) {
-  const row = getSettingStmt.get(key);
-  return row ? row.value : fallback;
-}
-
-const setSettingStmt = db.prepare(`
-  INSERT INTO settings (key, value) VALUES (?, ?)
-  ON CONFLICT(key) DO UPDATE SET value = excluded.value
-`);
-function setSetting(key, value) {
-  setSettingStmt.run(key, String(value));
-}
-
-// ---- Calendar posts (auto-updating) ----------------------------------------
-const insertCalendarPostStmt = db.prepare(`
-  INSERT INTO calendar_posts (guild_id, channel_id, message_id, timezone, created_at)
-  VALUES (?, ?, ?, ?, ?)
-`);
-function addCalendarPost({ guildId, channelId, messageId, timezone }) {
-  insertCalendarPostStmt.run(guildId, channelId, messageId, timezone, now());
-}
-
-const getCalendarPostsStmt = db.prepare(
-  'SELECT * FROM calendar_posts WHERE guild_id = ?',
-);
-function getCalendarPosts(guildId) {
-  return getCalendarPostsStmt.all(guildId);
-}
-
-const deleteCalendarPostStmt = db.prepare('DELETE FROM calendar_posts WHERE id = ?');
-function deleteCalendarPost(id) {
-  deleteCalendarPostStmt.run(id);
-}
-
-module.exports = {
-  db,
-  createEvent,
-  getEvent,
-  getEventByMessage,
-  setEventMessage,
-  setEventStatus,
-  updateEvent,
-  deleteEvent,
-  getDueReminders,
-  markReminderSent,
-  getJustExpired,
-  markExpiredRendered,
-  getEventsByRange,
-  getSignup,
-  getSignups,
-  upsertSignup,
-  removeSignup,
-  getUserTimezone,
-  setUserTimezone,
-  getSetting,
-  setSetting,
-  addSuggestion,
-  getSuggestion,
-  getSuggestions,
-  setSuggestionStatus,
-  addCalendarPost,
-  getCalendarPosts,
-  deleteCalendarPost,
-  createPopList,
-  getPopList,
-  getPopListByMessage,
-  setPopListMessage,
-  getPopMarks,
-  getUserPopMarks,
-  setUserPopMarks,
-  deletePopList,
-  resetPopList,
-};
+  return getPopListByMessage

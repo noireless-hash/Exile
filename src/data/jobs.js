@@ -1,4 +1,3 @@
-// Danh sách các build vũ khí chuẩn xác theo hệ thống Albion Online của bạn
 const JOBS_DATA = {
   TANK: [
     'Dreadstorm Monarch',
@@ -20,9 +19,6 @@ const JOBS_DATA = {
   ]
 };
 
-/**
- * Kiểm tra xem một vũ khí có thuộc role chỉ định hay không
- */
 function isValidJobForRole(role, job) {
   if (!role || !job) return false;
   const upperRole = role.toUpperCase();
@@ -30,9 +26,6 @@ function isValidJobForRole(role, job) {
   return validJobs.includes(job);
 }
 
-/**
- * Lấy toàn bộ danh sách jobs
- */
 function getAllJobs() {
   return JOBS_DATA;
 }

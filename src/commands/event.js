@@ -50,7 +50,7 @@ module.exports = {
           return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
-        const eventId = db.createEvent({
+        const event = db.createEvent({
           guild_id: interaction.guildId,
           channel_id: interaction.channelId,
           creator_id: interaction.user.id,
@@ -62,12 +62,12 @@ module.exports = {
           leader: interaction.user.displayName || interaction.user.username,
         });
 
-        const event = db.getEvent(eventId);
+        const eventId = event.id;
         const signups = db.getSignups(eventId);
         const msgData = buildEventMessage(event, signups);
 
         const sent = await interaction.channel.send(msgData);
-        db.updateEventMessageId(eventId, sent.id);
+        db.setEventMessage(eventId, sent.id);
 
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
       } catch (err) {

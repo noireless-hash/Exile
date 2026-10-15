@@ -4,30 +4,21 @@
 // emoji names to try, in priority order (most specific first), falling back to
 // the unicode `emoji`. `group` is the summary bucket (tank / dps / healer).
 const ROLES = [
-  { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
+  { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'DPS', icons: ['Tank'] },
   { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
   { key: 'Healer', label: 'Healer', emoji: '♻️', group: 'Healer', icons: ['Healer'] },
   { key: 'Support', label: 'Support', emoji: '🚸', group: 'Support', icons: ['Support'] },
 ];
 
-// Legacy/compat role keys that may still exist in the database from older
-// signups but are no longer offered as buttons. Rendered, never selectable.
 const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
-// The three top-level role buttons on the public board. `dps` is not a role on
-// its own — clicking it opens an ephemeral picker for the three DPS subtypes.
-const MAIN_ROLE_BUTTONS = [
-  { kind: 'role', key: 'Tank', label: 'Tank', emoji: '🛡️', icons: ['Tank'] },
-  { kind: 'role', label: 'DPS', emoji: '⚔️', icons: ['DPS'] },
-  { kind: 'role', key: 'Healer', label: 'Healer', emoji: '♻️', icons: ['Healer'] },
-  { kind: 'role', key: 'Support', label: 'Support', emoji: '🚸', icons: ['Support'] },
-];
+// ĐÃ XÓA CÁC NÚT BẤM MAIN ROLE (Để mảng rỗng để không hiển thị nút ra giao diện)
+const MAIN_ROLE_BUTTONS = [];
 
 // The DPS subtype choices shown in the ephemeral picker.
-const DPS_ROLES = ROLES.filter((r) => r.group === 'dps');
+const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
 
-// How the header summary line is grouped/labelled (the DPS subtypes collapse
-// into one "DPS" bucket), matching the compact Tank / DPS / Healer-Support row.
+// How the header summary line is grouped/labelled.
 const ROLE_GROUPS = [
   { label: 'Tank', emoji: '🛡️', icons: ['Tank'], keys: ['Tank'] },
   { label: 'DPS', emoji: '⚔️', icons: ['DPS'], keys: ['DPS'] },

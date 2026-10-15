@@ -1,44 +1,42 @@
-// FFXI jobs mapped directly to roles (tank, dps, healer, support)
+// Roles using Full Names as key
 const JOBS = [
   // Tank
-  { code: 'PLD', name: 'Paladin', emoji: '🛡️', group: 'tank' },
-  { code: 'NIN', name: 'Ninja', emoji: '🥷', group: 'tank' },
+  { code: 'Paladin', name: 'Paladin', emoji: '🛡️', group: 'tank' },
+  { code: 'Ninja', name: 'Ninja', emoji: '🥷', group: 'tank' },
 
   // DPS
-  { code: 'WAR', name: 'Warrior', emoji: '🪓', group: 'dps' },
-  { code: 'MNK', name: 'Monk', emoji: '👊', group: 'dps' },
-  { code: 'BLM', name: 'Black Mage', emoji: '🔥', group: 'dps' },
-  { code: 'DRK', name: 'Dark Knight', emoji: '🌑', group: 'dps' },
-  { code: 'BST', name: 'Beastmaster', emoji: '🐺', group: 'dps' },
-  { code: 'RNG', name: 'Ranger', emoji: '🏹', group: 'dps' },
-  { code: 'SAM', name: 'Samurai', emoji: '🗡️', group: 'dps' },
-  { code: 'DRG', name: 'Dragoon', emoji: '🐉', group: 'dps' },
+  { code: 'Warrior', name: 'Warrior', emoji: '🪓', group: 'dps' },
+  { code: 'Monk', name: 'Monk', emoji: '👊', group: 'dps' },
+  { code: 'Black Mage', name: 'Black Mage', emoji: '🔥', group: 'dps' },
+  { code: 'Dark Knight', name: 'Dark Knight', emoji: '🌑', group: 'dps' },
+  { code: 'Beastmaster', name: 'Beastmaster', emoji: '🐺', group: 'dps' },
+  { code: 'Ranger', name: 'Ranger', emoji: '🏹', group: 'dps' },
+  { code: 'Samurai', name: 'Samurai', emoji: '🗡️', group: 'dps' },
+  { code: 'Dragoon', name: 'Dragoon', emoji: '🐉', group: 'dps' },
 
   // Healer
-  { code: 'WHM', name: 'White Mage', emoji: '⛅', group: 'healer' },
+  { code: 'White Mage', name: 'White Mage', emoji: '⛅', group: 'healer' },
 
   // Support
-  { code: 'RDM', name: 'Red Mage', emoji: '🌹', group: 'support' },
-  { code: 'BRD', name: 'Bard', emoji: '🎵', group: 'support' },
-  { code: 'SMN', name: 'Summoner', emoji: '🔮', group: 'support' },
-  { code: 'THF', name: 'Thief', emoji: '🗝️', group: 'support' },
+  { code: 'Red Mage', name: 'Red Mage', emoji: '🌹', group: 'support' },
+  { code: 'Bard', name: 'Bard', emoji: '🎵', group: 'support' },
+  { code: 'Summoner', name: 'Summoner', emoji: '🔮', group: 'support' },
+  { code: 'Thief', name: 'Thief', emoji: '🗝️', group: 'support' },
 ];
 
 const JOB_BY_CODE = new Map(JOBS.map((j) => [j.code, j]));
 
-// Hàm lấy danh sách các Jobs thuộc về một Role cụ thể (VD: 'tank', 'dps', 'healer', 'support')
 function getJobsByRole(roleGroup) {
   return JOBS.filter((j) => j.group === roleGroup.toLowerCase());
 }
 
-// Hàm lấy Role group của 1 Job cụ thể
 function jobRole(code) {
   return JOB_BY_CODE.get(code)?.group || 'unknown';
 }
 
 function jobLabel(code) {
   const job = JOB_BY_CODE.get(code);
-  return job ? job.code : code || '???';
+  return job ? job.name : code || '???';
 }
 
 function jobEmoji(code) {

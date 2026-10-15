@@ -1,470 +1,87 @@
-const {
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  StringSelectMenuBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-} = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+const { discordTime, googleCalendarLink } = require('./time');
 
-const { ROLES, EXTRA_STATUSES, ROLE_GROUPS, STATUS, ROLE_BY_KEY, MAIN_ROLE_BUTTONS, DPS_ROLES } = require('../data/roles');
-const { JOBS, jobLabel, jobEmoji, jobName } = require('../data/jobs');
-const { discordTime, googleCalendarLink, formatLocalParts } = require('./time');
-const { jobEmojiMention, jobEmojiComponent, roleEmojiMention, roleEmojiComponent } = require('./guildEmojis');
-
-// ---- Component custom IDs --------------------------------------------------
-const ID = {
-  ROLE_PREFIX: 'evt:role:', // evt:role:<roleKey>
-  DPS_OPEN: 'evt:dps', // opens the DPS subtype picker
-  DPS_SET_PREFIX: 'evt:dpsset:', // evt:dpsset:<eventId>:<roleKey>
-  STATUS_PREFIX: 'evt:status:', // evt:status:<statusKey>
-  LEAVE: 'evt:leave',
-  JOB_SELECT: 'evt:job',
-  ROLE_JOB_SELECT_PREFIX: 'evt:rolejob:', // evt:rolejob:<eventId>:<roleKey>
-  EDIT_PREFIX: 'evt:edit:', // evt:edit:<eventId>
-  EDIT_LINKS_PREFIX: 'evt:editlinks:', // evt:editlinks:<eventId>
-  EDIT_MODAL_PREFIX: 'evt:editmodal:', // evt:editmodal:<eventId>
-  EDIT_LINKS_MODAL_PREFIX: 'evt:editlinksmodal:', // evt:editlinksmodal:<eventId>
-  CREATE_OPEN: 'evt:createopen', // persistent "Create Event" button
-  CREATE_MODAL: 'evt:createmodal', // modal submitted from the board
-};
-
-// ---- Suggestion box custom IDs ---------------------------------------------
-const SUG = {
-  OPEN: 'sug:open', // persistent "Suggest an improvement" button
-  MODAL: 'sug:modal', // modal submitted by a member
-  INPUT: 'text', // modal text input id
-};
-
-const ROLE_EMOJI = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.emoji]));
-const ROLE_ICONS_BY_KEY = Object.fromEntries([...ROLE_BY_KEY.values()].map((r) => [r.key, r.icons]));
-
-function blockifyTitle(title) {
-  const text = String(title || '').trim();
-  if (!text || text.length > 28) return text;
-  return [...text.toUpperCase()]
-    .map((ch) => (ch === ' ' ? '\u2002' : ch))
-    .join('\u2009');
-}
-
-function isExpired(event) {
-  const end = event.start_ts + (event.duration_min || 120) * 60;
-  return Math.floor(Date.now() / 1000) >= end;
-}
-
-function formatMember(s, slot, guildId) {
-  let roleIcon = '';
-  if (s.role) {
-    const custom = roleEmojiMention(guildId, ROLE_ICONS_BY_KEY[s.role]);
-    roleIcon = `${custom || ROLE_EMOJI[s.role] || '⚔️'} `;
-  }
-  return `\`${String(slot).padStart(2, ' ')}\` ${roleIcon}${s.username}`;
-}
-
-function buildEmbed(event, signups) {
-  const attending = signups.filter((s) => s.status === STATUS.ATTENDING);
-  const tentative = signups.filter((s) => s.status === STATUS.TENTATIVE);
-  const absence = signups.filter((s) => s.status === STATUS.ABSENCE);
-  const closed = event.status === 'closed';
-  const expired = isExpired(event);
-
-  const slot = new Map();
-  signups.forEach((s, i) => slot.set(s.user_id, i + 1));
-
-  // Áp dụng mã màu #aa8833 (0xAA8833) cho viền Embed khi Event đang diễn ra
-  const color = expired ? 0xed4245 : closed ? 0x95a5a6 : 0xAA8833;
-  const titlePrefix = closed ? '🔒 ' : expired ? '🔴 ' : '';
-  
+function buildEventMessage(event, signups = []) {
   const embed = new EmbedBuilder()
-    .setTitle(`${titlePrefix}👑 ${blockifyTitle(event.title)}`)
-    .setColor(color);
-  if (event.image_url) embed.setImage(event.image_url);
+    .setColor(0xAA8833) // Tông màu Vàng Đồng chuẩn Albion
+    .setTitle(`👑 ${event.title}`);
 
-  // ---- Header / description block ----
-  const GAP = '\u2003\u2003';
-  const roleCounts = ROLE_GROUPS.map((g) => {
-    const n = attending.filter((s) => g.keys.includes(s.role)).length;
-    const icon = roleEmojiMention(event.guild_id, g.icons) || g.emoji;
-    return `${icon} ${g.label} **${n}**`;
-  }).join(GAP);
-  
-  const head = `${attending.length} người`;
-  const tentSuffix = tentative.length ? ` (+${tentative.length} dự bị)` : '';
-
-  const lines = [];
-
-  // KHỐI TIÊU ĐỀ MÀU GOLD VỚI CÚ PHÁP FIX CODEBLOCK
-  lines.push(`\`\`\`fix\n👑 ${String(event.title || '').toUpperCase()}\n\`\`\``);
-
-  if (event.url) lines.push(event.url);
-  if (event.description) lines.push(event.description);
-  lines.push('');
-
-  const topBits = [];
-  if (event.leader || event.creator_name) topBits.push(`🏳️ **${event.leader || event.creator_name}**`);
-  topBits.push(`👥 **${head}**${tentSuffix}`);
-  lines.push(topBits.join(GAP));
-
-  // GIỜ HẸN NỔI BẬT TRONG KHỐI FIX CODEBLOCK
-  lines.push(`\n# 🕒 **GIỜ HẸN**\n\`\`\`fix\n${discordTime(event.start_ts, 't')}\n\`\`\``);
-
-  lines.push('');
-  lines.push(roleCounts);
-  if (closed) lines.push('\n**Signups are closed.**');
-  embed.setDescription(lines.join('\n'));
-
-  // Hiển thị danh sách người tham gia phân theo từng Vũ khí (Không giới hạn cap)
-  for (const job of JOBS) {
-    const members = attending.filter((s) => s.job === job.code);
-    if (!members.length) continue;
-    const emoji = jobEmojiMention(event.guild_id, job.code) || job.emoji;
-    embed.addFields({
-      name: `${emoji} **__${jobName(job.code)}__** (${members.length})`,
-      value: members.map((s) => formatMember(s, slot.get(s.user_id), event.guild_id)).join('\n'),
-      inline: true,
-    });
+  if (event.description) {
+    embed.setDescription(event.description);
   }
 
-  const noJob = attending.filter((s) => !s.job);
-  if (noJob.length) {
-    embed.addFields({
-      name: `❔ Chưa chọn Vũ khí (${noJob.length})`,
-      value: noJob.map((s) => formatMember(s, slot.get(s.user_id), event.guild_id)).join('\n'),
-      inline: true,
-    });
-  }
+  // Hiển thị thời gian trực tiếp, mượt mà chuẩn Discord Timestamp
+  const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
+  embed.addFields(
+    { name: '📅 Thời Gian', value: timeFormatted, inline: false },
+    { name: '🛡️ Tank', value: `${signups.filter(s => s.role === 'TANK').length}`, inline: true },
+    { name: '⚔️ DPS', value: `${signups.filter(s => s.role === 'DPS').length}`, inline: true },
+    { name: '🌿 Healer', value: `${signups.filter(s => s.role === 'HEALER').length}`, inline: true },
+    { name: '⚡ Support', value: `${signups.filter(s => s.role === 'SUPPORT').length}`, inline: true },
+    { name: '👥 Tổng tham gia', value: `${signups.filter(s => s.status === 'attending').length} người`, inline: true }
+  );
 
-  const inlineList = (arr) =>
-    arr.map((s) => `\`${slot.get(s.user_id)}\` ${s.username}`).join(', ');
-  const statusBlock = [];
-  if (tentative.length) statusBlock.push(`❔ **Dự bị (${tentative.length}):** ${inlineList(tentative)}`);
-  if (absence.length) statusBlock.push(`❌ **Vắng mặt (${absence.length}):** ${inlineList(absence)}`);
-  if (statusBlock.length) {
-    embed.addFields({ name: '\u200b', value: statusBlock.join('\n'), inline: false });
-  }
-
-  const gcal = googleCalendarLink({
+  // Link Google Calendar
+  const gCalUrl = googleCalendarLink({
     title: event.title,
     startTs: event.start_ts,
-    durationMin: event.duration_min || 120,
-    details: event.url || event.description || undefined,
+    durationMin: event.duration_min,
+    details: event.description,
   });
-  embed.addFields({ name: '\u200b', value: `[Add to Google Calendar](${gcal})`, inline: false });
 
-  const footer = closed
-    ? `Event #${event.id} • signups closed`
-    : expired
-      ? `Event #${event.id} • ended`
-      : `Event #${event.id}`;
-  embed.setFooter({ text: footer });
+  embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
+  embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  return embed;
-}
-
-// BUILD COMPONENTS CHÍNH (3 Hàng tương tác)
-function buildComponents(event) {
-  if (event.status === 'closed') return [];
-
-  // Hàng 1: 4 nút bấm vai trò (Tank, DPS, Healer, Support)
-  const roleRow = new ActionRowBuilder().addComponents(
-    ...MAIN_ROLE_BUTTONS.map((b) => {
-      const customId = b.kind === 'dps' ? ID.DPS_OPEN : `${ID.ROLE_PREFIX}${b.key}`;
-      return new ButtonBuilder()
-        .setCustomId(customId)
-        .setLabel(b.label)
-        .setEmoji(roleEmojiComponent(event.guild_id, b.icons) || b.emoji)
-        .setStyle(ButtonStyle.Primary);
-    }),
+  // 3 Hàng Tương Tác Bấm Nút & Menu
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
+    new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
+    new ButtonBuilder().setCustomId(`healer_${event.id}`).setLabel('Healer').setStyle(ButtonStyle.Primary).setEmoji('🌿'),
+    new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
   );
 
-  // Hàng 2: Nút trạng thái bổ trợ
-  const statusRow = new ActionRowBuilder().addComponents(
-    ...EXTRA_STATUSES.map((s) =>
-      new ButtonBuilder()
-        .setCustomId(`${ID.STATUS_PREFIX}${s.key}`)
-        .setLabel(s.label)
-        .setEmoji(s.emoji)
-        .setStyle(ButtonStyle.Secondary),
-    ),
-    new ButtonBuilder()
-      .setCustomId(ID.LEAVE)
-      .setLabel('Withdraw')
-      .setEmoji('🚪')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(SUG.OPEN)
-      .setLabel('Suggest')
-      .setEmoji('💡')
-      .setStyle(ButtonStyle.Secondary),
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
+    new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji('❌'),
+    new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  // Hàng 3: Select Menu chọn Vũ khí/Build trực tiếp
-  const jobRow = new ActionRowBuilder().addComponents(
+  const row3 = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId(ID.JOB_SELECT)
+      .setCustomId(`weapon_${event.id}`)
       .setPlaceholder('Chọn Vũ khí / Build của bạn...')
-      .addOptions(
-        JOBS.map((j) => {
-          const option = { label: `${j.name} (${j.code})`, value: j.code };
-          const custom = jobEmojiComponent(event.guild_id, j.code);
-          if (custom) option.emoji = custom;
-          return option;
-        }),
-      ),
+      .addOptions([
+        { label: '🔥 Fire Staff', value: 'Fire Staff', description: 'Damage diện rộng (DPS)' },
+        { label: '❄️ Frost Staff', value: 'Frost Staff', description: 'Control / Slow (DPS)' },
+        { label: '🛡️ Heavy Mace', value: 'Heavy Mace', description: 'Tank mở giao tranh' },
+        { label: '🌿 Holy / Nature', value: 'Healer Set', description: 'Hồi máu chính (Healer)' },
+      ])
   );
 
-  return [roleRow, statusRow, jobRow];
-}
-
-function buildRoleJobPicker(event, roleKey) {
-  const roleGroup = ROLE_GROUPS.find((g) => g.keys.includes(roleKey) || g.label.toLowerCase() === roleKey.toLowerCase());
-  const filteredJobs = JOBS.filter((j) => (roleGroup ? roleGroup.keys.includes(j.group) || j.group.toLowerCase() === roleGroup.label.toLowerCase() : true));
-
-  const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`${ID.ROLE_JOB_SELECT_PREFIX}${event.id}:${roleKey}`)
-    .setPlaceholder(`Chọn Job ${roleKey} của bạn...`)
-    .addOptions(
-      filteredJobs.map((j) => {
-        const option = { label: `${j.name} (${j.code})`, value: j.code };
-        const custom = jobEmojiComponent(event.guild_id, j.code);
-        if (custom) option.emoji = custom;
-        return option;
-      }),
-    );
-
-  return [new ActionRowBuilder().addComponents(selectMenu)];
-}
-
-function buildDpsPicker(event) {
-  const row = new ActionRowBuilder().addComponents(
-    ...DPS_ROLES.map((role) =>
-      new ButtonBuilder()
-        .setCustomId(`${ID.DPS_SET_PREFIX}${event.id}:${role.key}`)
-        .setLabel(role.label)
-        .setEmoji(roleEmojiComponent(event.guild_id, role.icons) || role.emoji)
-        .setStyle(ButtonStyle.Primary),
-    ),
-  );
-  return [row];
-}
-
-function buildManageComponents(event) {
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${ID.EDIT_PREFIX}${event.id}`)
-        .setLabel('Edit Event')
-        .setEmoji('✏️')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`${ID.EDIT_LINKS_PREFIX}${event.id}`)
-        .setLabel('Edit Links/Image')
-        .setEmoji('🖼️')
-        .setStyle(ButtonStyle.Secondary),
-    ),
-  ];
-}
-
-function buildEditModal(event) {
-  const { date, time } = formatLocalParts(event.start_ts, event.timezone);
-
-  const titleInput = new TextInputBuilder()
-    .setCustomId('title')
-    .setLabel('Title')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(100)
-    .setValue(event.title ?? '');
-
-  const timeInput = new TextInputBuilder()
-    .setCustomId('time')
-    .setLabel('Time (e.g. 18:00, 18h30, 8pm)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setValue(time);
-
-  const leaderInput = new TextInputBuilder()
-    .setCustomId('leader')
-    .setLabel('Leader (blank to clear)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setValue(event.leader ?? '');
-
-  return new ModalBuilder()
-    .setCustomId(`${ID.EDIT_MODAL_PREFIX}${event.id}`)
-    .setTitle(`Edit Event #${event.id}`)
-    .addComponents(
-      new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(timeInput),
-      new ActionRowBuilder().addComponents(leaderInput),
-    );
-}
-
-function buildEditLinksModal(event) {
-  const descInput = new TextInputBuilder()
-    .setCustomId('description')
-    .setLabel('Description / notes (blank to clear)')
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false)
-    .setMaxLength(1000)
-    .setValue(event.description ?? '');
-
-  const urlInput = new TextInputBuilder()
-    .setCustomId('url')
-    .setLabel('Event link (blank clears)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setValue(event.url ?? '');
-
-  const imageInput = new TextInputBuilder()
-    .setCustomId('image')
-    .setLabel('Image/banner URL (blank to clear)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(false)
-    .setValue(event.image_url ?? '');
-
-  return new ModalBuilder()
-    .setCustomId(`${ID.EDIT_LINKS_MODAL_PREFIX}${event.id}`)
-    .setTitle(`Edit Links/Image #${event.id}`)
-    .addComponents(
-      new ActionRowBuilder().addComponents(descInput),
-      new ActionRowBuilder().addComponents(urlInput),
-      new ActionRowBuilder().addComponents(imageInput),
-    );
-}
-
-function buildEventMessage(event, signups) {
   return {
-    embeds: [buildEmbed(event, signups)],
-    components: buildComponents(event),
+    embeds: [embed],
+    components: [row1, row2, row3],
   };
-}
-
-function buildSuggestModal() {
-  const input = new TextInputBuilder()
-    .setCustomId(SUG.INPUT)
-    .setLabel('Your suggestion')
-    .setPlaceholder('What would make events / the bot better?')
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(true)
-    .setMaxLength(1000);
-
-  return new ModalBuilder()
-    .setCustomId(SUG.MODAL)
-    .setTitle('💡 Suggest an improvement')
-    .addComponents(new ActionRowBuilder().addComponents(input));
-}
-
-function buildSuggestButtonRow() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(SUG.OPEN)
-      .setLabel('Suggest an improvement')
-      .setEmoji('💡')
-      .setStyle(ButtonStyle.Primary),
-  );
-}
-
-function buildSuggestBoardMessage() {
-  const embed = new EmbedBuilder()
-    .setColor(0xAA8833)
-    .setTitle('💡 Suggestion Box')
-    .setDescription(
-      [
-        'Have an idea to improve events or the bot? Tap the button below.',
-        'Your suggestion is sent privately to the organizers — no public spam.',
-      ].join('\n'),
-    );
-  return { embeds: [embed], components: [buildSuggestButtonRow()] };
-}
-
-function buildSuggestionList(rows, { status } = {}) {
-  const label = status ? `${status} ` : '';
-  if (!rows.length) {
-    return `📭 No ${label}suggestions yet.`;
-  }
-  const lines = rows.slice(0, 25).map((s) => {
-    const mark = s.status === 'done' ? '✅' : s.status === 'dismissed' ? '🚫' : '•';
-    const when = `<t:${s.created_at}:d>`;
-    const text = s.text.length > 180 ? `${s.text.slice(0, 177)}…` : s.text;
-    return `${mark} \`#${s.id}\` ${when} — **${s.username}**: ${text}`;
-  });
-  const header = `**💡 Suggestions${status ? ` (${status})` : ''}** — ${rows.length} total`;
-  const more = rows.length > 25 ? `\n…and ${rows.length - 25} more.` : '';
-  return [header, ...lines].join('\n') + more;
 }
 
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0xAA8833)
-    .setTitle('📅 Tạo Event Mới Trong Ngày')
-    .setDescription(
-      [
-        'Bấm vào nút bên dưới để tạo sự kiện mới nhanh trong ngày.',
-        'Điền thông tin và bảng đăng ký sẽ được tự động đăng lên kênh này.',
-      ].join('\n'),
-    );
+    .setTitle('🏰 HỆ THỐNG SỰ KIỆN ALBION ONLINE')
+    .setDescription('Bấm nút bên dưới để tạo nhanh sự kiện mới cho Guild!');
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(ID.CREATE_OPEN)
-      .setLabel('Tạo Event')
+      .setCustomId('open_create_event_modal')
+      .setLabel('Tạo Sự Kiện Mới')
+      .setStyle(ButtonStyle.Success)
       .setEmoji('📅')
-      .setStyle(ButtonStyle.Primary),
   );
+
   return { embeds: [embed], components: [row] };
 }
 
-// MODAL TẠO EVENT MỚI ĐÃ BỎ BỚT Ô NHẬP NGÀY
-function buildCreateModal() {
-  const titleInput = new TextInputBuilder()
-    .setCustomId('title')
-    .setLabel('Tên sự kiện')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(100)
-    .setPlaceholder('VD: ZvZ Martlock / Ava Raid 8.3');
-
-  const timeInput = new TextInputBuilder()
-    .setCustomId('time')
-    .setLabel('Giờ hẹn (VD: 20:00, 20h30, 8pm)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setPlaceholder('VD: 20:00 hoặc 20h30');
-
-  const descInput = new TextInputBuilder()
-    .setCustomId('description')
-    .setLabel('Ghi chú / Yêu cầu IP (tùy chọn)')
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false)
-    .setMaxLength(1000)
-    .setPlaceholder('Nhập thông tin yêu cầu IP, Mass location...');
-
-  return new ModalBuilder()
-    .setCustomId(ID.CREATE_MODAL)
-    .setTitle('📅 Tạo Event Mới Trong Ngày')
-    .addComponents(
-      new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(timeInput),
-      new ActionRowBuilder().addComponents(descInput),
-    );
-}
-
 module.exports = {
-  ID,
-  SUG,
-  isExpired,
   buildEventMessage,
-  buildManageComponents,
-  buildDpsPicker,
-  buildRoleJobPicker,
-  buildEditModal,
-  buildEditLinksModal,
   buildCreateBoardMessage,
-  buildCreateModal,
-  buildSuggestModal,
-  buildSuggestButtonRow,
-  buildSuggestBoardMessage,
-  buildSuggestionList,
 };

@@ -1,21 +1,18 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
+// Bản đồ tra cứu Emoji chuẩn từ các ảnh bạn vừa tải lên server Discord
 const WEAPON_EMOJIS = {
-  'Heavy Mace': '🛡️',
-  'Incubus Mace': '🦇',
-  'Great Hammer': '⚓',
-  'Enigmatic Staff': '🛡️',
-  'Fire Staff': '🔥',
-  'Frost Staff': '❄️',
-  'Bow': '🏹',
-  'Crossbow': '⚡',
-  'Melee DPS': '🗡️',
-  'Holy Healer': '🌿',
-  'Nature Healer': '🍃',
-  'Fallen Staff': '✨',
-  'Arcane Support': '📯',
-  'Utility Support': '🕯️'
+  'Dreadstorm Monarch': '<:EldersDreadstormMonarch:1560414109680541797>',
+  'Heavy Mace': '<:EldersHeavyMace:1560414517995901138>',
+  'Crystal Reaper': '<:EldersCrystalReaper:1560415626898571385>',
+  'Hallowfall': '<:EldersHallowfall:1560415652945072220>',
+  'Blight Staff': '<:EldersBlightStaff:1560415698780684448>',
+  'Lightcaller': '<:EldersLightcaller:1560415730787160194>',
+  'Hellspawn Staff': '<:EldersHellspawnStaff:1560415780372480100>',
+  'Permafrost Prism': '<:EldersPermafrostPrism:1560415806825959604>',
+  'Astral Staff': '<:EldersAstralStaff:1560415832331264010>',
+  'Rootbound Staff': '<:EldersRootboundStaff:1560415947653648555>'
 };
 
 function buildWeaponSelectMenu(eventId, role) {
@@ -28,35 +25,31 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' },
-        { label: 'Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn', emoji: '🦇' },
-        { label: 'Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng', emoji: '⚓' },
-        { label: 'Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê', emoji: '🛡️' },
+        { label: 'Dreadstorm Monarch', value: 'Dreadstorm Monarch', description: 'Tank chuyên dụng ZvZ', emoji: WEAPON_EMOJIS['Dreadstorm Monarch'] },
+        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: WEAPON_EMOJIS['Heavy Mace'] },
       ]);
   } else if (roleUpper === 'DPS') {
     selectMenu
       .setPlaceholder('⚔️ Chọn Vũ khí DPS của bạn...')
       .addOptions([
-        { label: 'Fire Staff', value: 'Fire Staff', description: 'Sát thương diện rộng lớn', emoji: '🔥' },
-        { label: 'Frost Staff', value: 'Frost Staff', description: 'Làm chậm & dồn sát thương', emoji: '❄️' },
-        { label: 'Bow', value: 'Bow', description: 'Sát thương tầm xa liên tục', emoji: '🏹' },
-        { label: 'Crossbow', value: 'Crossbow', description: 'Sát thương dồn cực mạnh', emoji: '⚡' },
-        { label: 'Melee DPS', value: 'Melee DPS', description: 'Cận chiến cơ động / Cắt giáp', emoji: '🗡️' },
+        { label: 'Crystal Reaper', value: 'Crystal Reaper', description: 'Sát thương diện rộng chí mạng', emoji: WEAPON_EMOJIS['Crystal Reaper'] },
+        { label: 'Lightcaller', value: 'Lightcaller', description: 'Cấu rỉa tầm xa', emoji: WEAPON_EMOJIS['Lightcaller'] },
+        { label: 'Hellspawn Staff', value: 'Hellspawn Staff', description: 'Sát thương lửa cực mạnh', emoji: WEAPON_EMOJIS['Hellspawn Staff'] },
+        { label: 'Permafrost Prism', value: 'Permafrost Prism', description: 'Đóng băng & dồn sát thương', emoji: WEAPON_EMOJIS['Permafrost Prism'] },
+        { label: 'Astral Staff', value: 'Astral Staff', description: 'Sát thương phép thuật diện rộng', emoji: WEAPON_EMOJIS['Astral Staff'] },
       ]);
   } else if (roleUpper === 'HEALER') {
     selectMenu
       .setPlaceholder('🌿 Chọn Vũ khí Healer của bạn...')
       .addOptions([
-        { label: 'Holy Healer', value: 'Holy Healer', description: 'Hồi máu nhóm cực mạnh & cơ động', emoji: '🌿' },
-        { label: 'Nature Healer', value: 'Nature Healer', description: 'Hồi máu theo thời gian (HoT)', emoji: '🍃' },
-        { label: 'Fallen Staff', value: 'Fallen Staff', description: 'Hồi máu diện rộng diện tích lớn', emoji: '✨' },
+        { label: 'Hallowfall', value: 'Hallowfall', description: 'Hồi máu nhóm cơ động cao', emoji: WEAPON_EMOJIS['Hallowfall'] },
+        { label: 'Blight Staff', value: 'Blight Staff', description: 'Hồi máu theo thời gian (HoT)', emoji: WEAPON_EMOJIS['Blight Staff'] },
       ]);
   } else if (roleUpper === 'SUPPORT') {
     selectMenu
       .setPlaceholder('⚡ Chọn Vũ khí Support của bạn...')
       .addOptions([
-        { label: 'Arcane Support', value: 'Arcane Support', description: 'Buff kháng & tăng sát thương', emoji: '📯' },
-        { label: 'Utility Support', value: 'Utility Support', description: 'Khống chế & hỗ trợ chiến thuật', emoji: '🕯️' },
+        { label: 'Rootbound Staff', value: 'Rootbound Staff', description: 'Khống chế diện rộng', emoji: WEAPON_EMOJIS['Rootbound Staff'] },
       ]);
   } else {
     selectMenu
@@ -71,8 +64,6 @@ function buildWeaponSelectMenu(eventId, role) {
 
 function buildEventMessage(event, signups = [], currentRole = null) {
   const uppercaseTitle = (event.title || '').toUpperCase();
-  
-  // Dùng tiêu đề lớn cấp 1 của Markdown để phóng to tiêu đề
   const bigTitle = `# ⚔️ ${uppercaseTitle} ⚔️`;
   const descText = event.description ? `\n*${event.description}*` : '';
 
@@ -128,7 +119,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  const row3 = buildWeaponSelectMenu(event.id, currentRole);
+  const row3 = buildWeaponSelectMenu(event.id, currentRule = currentRole);
 
   return {
     embeds: [embed],

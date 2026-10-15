@@ -115,7 +115,7 @@ function buildEmbed(event, signups) {
   if (closed) lines.push('\n**Signups are closed.**');
   embed.setDescription(lines.join('\n'));
 
-  // Hiển thị danh sách không giới hạn
+  // Hiển thị danh sách người tham gia phân theo từng Vũ khí (Không giới hạn cap)
   for (const job of JOBS) {
     const members = attending.filter((s) => s.job === job.code);
     if (!members.length) continue;
@@ -163,7 +163,7 @@ function buildEmbed(event, signups) {
   return embed;
 }
 
-// BUILD COMPONENTS CHÍNH (3 Hàng trực tiếp)
+// BUILD COMPONENTS CHÍNH (3 Hàng tương tác)
 function buildComponents(event) {
   if (event.status === 'closed') return [];
 
@@ -200,7 +200,7 @@ function buildComponents(event) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  // Hàng 3: Select Menu hiển thị TRỰC TIẾP trên giao diện tin nhắn Event
+  // Hàng 3: Select Menu chọn Vũ khí/Build trực tiếp
   const jobRow = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(ID.JOB_SELECT)
@@ -278,13 +278,6 @@ function buildEditModal(event) {
     .setMaxLength(100)
     .setValue(event.title ?? '');
 
-  const dateInput = new TextInputBuilder()
-    .setCustomId('date')
-    .setLabel('Date (YYYY-MM-DD)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setValue(date);
-
   const timeInput = new TextInputBuilder()
     .setCustomId('time')
     .setLabel('Time (e.g. 18:00, 18h30, 8pm)')
@@ -304,7 +297,6 @@ function buildEditModal(event) {
     .setTitle(`Edit Event #${event.id}`)
     .addComponents(
       new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(dateInput),
       new ActionRowBuilder().addComponents(timeInput),
       new ActionRowBuilder().addComponents(leaderInput),
     );
@@ -407,10 +399,10 @@ function buildSuggestionList(rows, { status } = {}) {
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0xAA8833)
-    .setTitle('📅 Tạo Event Mới')
+    .setTitle('📅 Tạo Event Mới Trong Ngày')
     .setDescription(
       [
-        'Bấm vào nút bên dưới để tạo sự kiện mới.',
+        'Bấm vào nút bên dưới để tạo sự kiện mới nhanh trong ngày.',
         'Điền thông tin và bảng đăng ký sẽ được tự động đăng lên kênh này.',
       ].join('\n'),
     );
@@ -424,6 +416,7 @@ function buildCreateBoardMessage() {
   return { embeds: [embed], components: [row] };
 }
 
+// MODAL TẠO EVENT MỚI ĐÃ BỎ BỚT Ô NHẬP NGÀY
 function buildCreateModal() {
   const titleInput = new TextInputBuilder()
     .setCustomId('title')
@@ -432,13 +425,6 @@ function buildCreateModal() {
     .setRequired(true)
     .setMaxLength(100)
     .setPlaceholder('VD: ZvZ Martlock / Ava Raid 8.3');
-
-  const dateInput = new TextInputBuilder()
-    .setCustomId('date')
-    .setLabel('Ngày (YYYY-MM-DD)')
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setPlaceholder('VD: 2026-10-20');
 
   const timeInput = new TextInputBuilder()
     .setCustomId('time')
@@ -457,10 +443,9 @@ function buildCreateModal() {
 
   return new ModalBuilder()
     .setCustomId(ID.CREATE_MODAL)
-    .setTitle('📅 Tạo Event Mới')
+    .setTitle('📅 Tạo Event Mới Trong Ngày')
     .addComponents(
       new ActionRowBuilder().addComponents(titleInput),
-      new ActionRowBuilder().addComponents(dateInput),
       new ActionRowBuilder().addComponents(timeInput),
       new ActionRowBuilder().addComponents(descInput),
     );

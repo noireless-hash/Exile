@@ -10,12 +10,9 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('create')
-        .setDescription('Tạo một sự kiện mới')
+        .setDescription('Tạo một sự kiện mới trong ngày')
         .addStringOption((opt) =>
           opt.setName('title').setDescription('Tên sự kiện (VD: ZvZ Martlock / Ava Raid)').setRequired(true),
-        )
-        .addStringOption((opt) =>
-          opt.setName('date').setDescription('Ngày diễn ra (YYYY-MM-DD hoặc hôm nay)').setRequired(true),
         )
         .addStringOption((opt) =>
           opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true),
@@ -31,7 +28,6 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    // Hoãn phản hồi để tránh lỗi "Ứng dụng không phản hồi" (cho bot thêm thời gian xử lý DB)
     await interaction.deferReply({ ephemeral: true });
 
     const subcommand = interaction.options.getSubcommand();
@@ -45,13 +41,13 @@ module.exports = {
     if (subcommand === 'create') {
       try {
         const title = interaction.options.getString('title');
-        const dateStr = interaction.options.getString('date');
         const timeStr = interaction.options.getString('time');
         const description = interaction.options.getString('description') || null;
 
-        const parsed = parseEventTime(dateStr, timeStr, 'Asia/Ho_Chi_Minh');
+        // Tự động truyền 'today' làm ngày mặc định
+        const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
         if (!parsed.valid) {
-          return interaction.editReply({ content: `❌ Định dạng ngày/giờ không hợp lệ: ${parsed.error}` });
+          return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
         const eventId = db.createEvent({

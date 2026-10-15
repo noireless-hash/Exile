@@ -1,58 +1,77 @@
-// Roles using Full Names as key
+// Khai báo danh sách FFXI Jobs
 const JOBS = [
   // Tank
-  { code: 'Paladin', name: 'Paladin', emoji: '🛡️', group: 'tank' },
-  { code: 'Ninja', name: 'Ninja', emoji: '🥷', group: 'tank' },
+  { code: 'PLD', name: 'Paladin', emoji: '🛡️', group: 'Tank' },
+  { code: 'NIN', name: 'Ninja', emoji: '🥷', group: 'Tank' },
 
   // DPS
-  { code: 'Warrior', name: 'Warrior', emoji: '🪓', group: 'dps' },
-  { code: 'Monk', name: 'Monk', emoji: '👊', group: 'dps' },
-  { code: 'Black Mage', name: 'Black Mage', emoji: '🔥', group: 'dps' },
-  { code: 'Dark Knight', name: 'Dark Knight', emoji: '🌑', group: 'dps' },
-  { code: 'Beastmaster', name: 'Beastmaster', emoji: '🐺', group: 'dps' },
-  { code: 'Ranger', name: 'Ranger', emoji: '🏹', group: 'dps' },
-  { code: 'Samurai', name: 'Samurai', emoji: '🗡️', group: 'dps' },
-  { code: 'Dragoon', name: 'Dragoon', emoji: '🐉', group: 'dps' },
+  { code: 'WAR', name: 'Warrior', emoji: '🪓', group: 'DPS' },
+  { code: 'MNK', name: 'Monk', emoji: '👊', group: 'DPS' },
+  { code: 'BLM', name: 'Black Mage', emoji: '🔥', group: 'DPS' },
+  { code: 'DRK', name: 'Dark Knight', emoji: '🌑', group: 'DPS' },
+  { code: 'BST', name: 'Beastmaster', emoji: '🐺', group: 'DPS' },
+  { code: 'RNG', name: 'Ranger', emoji: '🏹', group: 'DPS' },
+  { code: 'SAM', name: 'Samurai', emoji: '🗡️', group: 'DPS' },
+  { code: 'DRG', name: 'Dragoon', emoji: '🐉', group: 'DPS' },
 
   // Healer
-  { code: 'White Mage', name: 'White Mage', emoji: '⛅', group: 'healer' },
+  { code: 'WHM', name: 'White Mage', emoji: '⛅', group: 'Healer' },
 
   // Support
-  { code: 'Red Mage', name: 'Red Mage', emoji: '🌹', group: 'support' },
-  { code: 'Bard', name: 'Bard', emoji: '🎵', group: 'support' },
-  { code: 'Summoner', name: 'Summoner', emoji: '🔮', group: 'support' },
-  { code: 'Thief', name: 'Thief', emoji: '🗝️', group: 'support' },
+  { code: 'RDM', name: 'Red Mage', emoji: '🌹', group: 'Support' },
+  { code: 'BRD', name: 'Bard', emoji: '🎵', group: 'Support' },
+  { code: 'SMN', name: 'Summoner', emoji: '🔮', group: 'Support' },
+  { code: 'THF', name: 'Thief', emoji: '🗝️', group: 'Support' },
 ];
 
-const JOB_BY_CODE = new Map(JOBS.map((j) => [j.code, j]));
+// Danh sách Role chính
+const ROLES = [
+  { key: 'Tank', label: 'Tank', emoji: '🛡️', group: 'Tank', icons: ['Tank'] },
+  { key: 'DPS', label: 'DPS', emoji: '⚔️', group: 'DPS', icons: ['DPS'] },
+  { key: 'Healer', label: 'Healer', emoji: '♻️', group: 'Healer', icons: ['Healer'] },
+  { key: 'Support', label: 'Support', emoji: '🚸', group: 'Support', icons: ['Support'] },
+];
 
-function getJobsByRole(roleGroup) {
-  return JOBS.filter((j) => j.group === roleGroup.toLowerCase());
-}
+const LEGACY_ROLES = [];
+const ROLE_BY_KEY = new Map(ROLES.map((r) => [r.key, r]));
 
-function jobRole(code) {
-  return JOB_BY_CODE.get(code)?.group || 'unknown';
-}
+// CHUYỂN DỔI JOBS THÀNH NÚT BẤM (Tránh lỗi ActionRow rỗng)
+const MAIN_ROLE_BUTTONS = JOBS.map((job) => ({
+  kind: 'role',
+  key: job.code,
+  label: job.name,
+  emoji: job.emoji,
+  icons: [job.code],
+}));
 
-function jobLabel(code) {
-  const job = JOB_BY_CODE.get(code);
-  return job ? job.name : code || '???';
-}
+const DPS_ROLES = ROLES.filter((r) => r.group === 'DPS');
 
-function jobEmoji(code) {
-  return JOB_BY_CODE.get(code)?.emoji || '❔';
-}
+const ROLE_GROUPS = [
+  { label: 'Tank', emoji: '🛡️', icons: ['Tank'], keys: ['Tank'] },
+  { label: 'DPS', emoji: '⚔️', icons: ['DPS'], keys: ['DPS'] },
+  { label: 'Healer', emoji: '♻️', icons: ['Healer'], keys: ['Healer'] },
+  { label: 'Support', emoji: '🚸', icons: ['Support'], keys: ['Support'] },
+];
 
-function jobName(code) {
-  return JOB_BY_CODE.get(code)?.name || code || 'No Job';
-}
+const STATUS = {
+  ATTENDING: 'attending',
+  TENTATIVE: 'tentative',
+  ABSENCE: 'absence',
+};
 
-module.exports = { 
-  JOBS, 
-  JOB_BY_CODE, 
-  getJobsByRole, 
-  jobRole, 
-  jobLabel, 
-  jobEmoji, 
-  jobName 
+const EXTRA_STATUSES = [
+  { key: STATUS.TENTATIVE, label: 'Tentative', emoji: '❔' },
+  { key: STATUS.ABSENCE, label: 'Absence', emoji: '❌' },
+];
+
+module.exports = {
+  JOBS,
+  ROLES,
+  LEGACY_ROLES,
+  ROLE_BY_KEY,
+  MAIN_ROLE_BUTTONS,
+  DPS_ROLES,
+  ROLE_GROUPS,
+  STATUS,
+  EXTRA_STATUSES,
 };

@@ -1,9 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
-/**
- * Tạo danh sách vũ khí tương ứng với Role mà người dùng vừa chọn
- */
 function buildWeaponSelectMenu(eventId, role) {
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId(`weapon_${role ? role.toLowerCase() : 'none'}_${eventId}`);
@@ -14,42 +11,41 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: '🛡️ Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực' },
-        { label: '🦇 Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn' },
-        { label: '⚓ Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng' },
-        { label: '🛡️ Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê' },
+        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' },
+        { label: 'Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn', emoji: '🦇' },
+        { label: 'Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng', emoji: '⚓' },
+        { label: 'Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê', emoji: '🛡️' },
       ]);
   } else if (roleUpper === 'DPS') {
     selectMenu
       .setPlaceholder('⚔️ Chọn Vũ khí DPS của bạn...')
       .addOptions([
-        { label: '🔥 1H Fire / Wildfire', value: 'Fire Staff', description: 'Sát thương diện rộng lớn' },
-        { label: '❄️ Permafrost / Great Frost', value: 'Frost Staff', description: 'Làm chậm & dồn sát thương' },
-        { label: '🏹 Badon / Longbow', value: 'Bow', description: 'Sát thương tầm xa liên tục' },
-        { label: '⚡ Energy Shaper / Crossbow', value: 'Crossbow', description: 'Sát thương dồn cực mạnh' },
-        { label: '🗡️ Bloodletter / Carving', value: 'Melee DPS', description: 'Cận chiến cơ động / Cắt giáp' },
+        { label: 'Fire Staff', value: 'Fire Staff', description: 'Sát thương diện rộng lớn', emoji: '🔥' },
+        { label: 'Frost Staff', value: 'Frost Staff', description: 'Làm chậm & dồn sát thương', emoji: '❄️' },
+        { label: 'Bow', value: 'Bow', description: 'Sát thương tầm xa liên tục', emoji: '🏹' },
+        { label: 'Crossbow', value: 'Crossbow', description: 'Sát thương dồn cực mạnh', emoji: '⚡' },
+        { label: 'Melee DPS', value: 'Melee DPS', description: 'Cận chiến cơ động / Cắt giáp', emoji: '🗡️' },
       ]);
   } else if (roleUpper === 'HEALER') {
     selectMenu
       .setPlaceholder('🌿 Chọn Vũ khí Healer của bạn...')
       .addOptions([
-        { label: '🌿 1H Holy / Hallowfall', value: 'Holy Healer', description: 'Hồi máu nhóm cực mạnh & cơ động' },
-        { label: '🍃 Great Nature / Blight Staff', value: 'Nature Healer', description: 'Hồi máu theo thời gian (HoT)' },
-        { label: '✨ Fallen Staff', value: 'Fallen Staff', description: 'Hồi máu diện rộng diện tích lớn' },
+        { label: 'Holy Healer', value: 'Holy Healer', description: 'Hồi máu nhóm cực mạnh & cơ động', emoji: '🌿' },
+        { label: 'Nature Healer', value: 'Nature Healer', description: 'Hồi máu theo thời gian (HoT)', emoji: '🍃' },
+        { label: 'Fallen Staff', value: 'Fallen Staff', description: 'Hồi máu diện rộng diện tích lớn', emoji: '✨' },
       ]);
   } else if (roleUpper === 'SUPPORT') {
     selectMenu
       .setPlaceholder('⚡ Chọn Vũ khí Support của bạn...')
       .addOptions([
-        { label: '📯 Arcane Staff', value: 'Arcane Support', description: 'Buff kháng & tăng sát thương' },
-        { label: '🕯️ Rootbound Staff', value: 'Utility Support', description: 'Khống chế & hỗ trợ chiến thuật' },
+        { label: 'Arcane Support', value: 'Arcane Support', description: 'Buff kháng & tăng sát thương', emoji: '📯' },
+        { label: 'Utility Support', value: 'Utility Support', description: 'Khống chế & hỗ trợ chiến thuật', emoji: '🕯️' },
       ]);
   } else {
-    // Mặc định khi vừa tạo event chưa chọn role
     selectMenu
-      .setPlaceholder('🎯 Chọn Role (Tank/DPS/Healer/Support) để hiện danh sách Vũ khí...')
+      .setPlaceholder('🎯 Chọn Role bên trên trước để hiện danh sách Vũ khí...')
       .addOptions([
-        { label: 'ℹ️ Hướng dẫn', value: 'guide', description: 'Vui lòng bấm nút Tank, DPS, Healer hoặc Support ở trên' }
+        { label: 'Hướng dẫn', value: 'guide', description: 'Vui lòng bấm nút Tank, DPS, Healer hoặc Support ở trên', emoji: 'ℹ️' }
       ]);
   }
 
@@ -58,7 +54,7 @@ function buildWeaponSelectMenu(eventId, role) {
 
 function buildEventMessage(event, signups = [], currentRole = null) {
   const embed = new EmbedBuilder()
-    .setColor(0xAA8833) // Vàng Đồng Albion
+    .setColor(0xAA8833)
     .setTitle(`👑 ${event.title}`);
 
   if (event.description) {
@@ -66,14 +62,27 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   }
 
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
-  embed.addFields(
-    { name: '📅 Thời Gian', value: timeFormatted, inline: false },
-    { name: '🛡️ Tank', value: `${signups.filter(s => s.role === 'TANK').length}`, inline: true },
-    { name: '⚔️ DPS', value: `${signups.filter(s => s.role === 'DPS').length}`, inline: true },
-    { name: '🌿 Healer', value: `${signups.filter(s => s.role === 'HEALER').length}`, inline: true },
-    { name: '⚡ Support', value: `${signups.filter(s => s.role === 'SUPPORT').length}`, inline: true },
-    { name: '👥 Tổng tham gia', value: `${signups.filter(s => s.status === 'attending').length} người`, inline: true }
-  );
+  embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
+
+  // Lọc danh sách theo từng role và format hiển thị kèm tên + vũ khí (job)
+  const roles = [
+    { name: '🛡️ Tank', key: 'TANK' },
+    { name: '⚔️ DPS', key: 'DPS' },
+    { name: '🌿 Healer', key: 'HEALER' },
+    { name: '⚡ Support', key: 'SUPPORT' },
+  ];
+
+  for (const r of roles) {
+    const list = signups.filter(s => s.role === r.key && s.status === 'attending');
+    const valueStr = list.length > 0 
+      ? list.map(s => `• **${s.username}** ${s.job ? `(${s.job})` : ''}`).join('\n')
+      : '_Trống_';
+    
+    embed.addFields({ name: `${r.name} (${list.length})`, value: valueStr, inline: true });
+  }
+
+  const attendingCount = signups.filter(s => s.status === 'attending').length;
+  embed.addFields({ name: '👥 Tổng tham gia', value: `${attendingCount} người`, inline: false });
 
   const gCalUrl = googleCalendarLink({
     title: event.title,
@@ -85,7 +94,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  // Hàng 1: Nút chọn Role
+  // Các nút tương tác
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
     new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
@@ -93,14 +102,12 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
   );
 
-  // Hàng 2: Nút trạng thái phụ & Withdraw
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
     new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji('❌'),
     new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  // Hàng 3: Menu chọn vũ khí động theo Role vừa chọn
   const row3 = buildWeaponSelectMenu(event.id, currentRole);
 
   return {

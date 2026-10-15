@@ -11,7 +11,7 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' }, // Đã thêm emoji
+        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: '🛡️' },
         { label: 'Incubus Mace', value: 'Incubus Mace', description: 'Giảm kháng chịu đòn', emoji: '🦇' },
         { label: 'Great Hammer', value: 'Great Hammer', description: 'Khống chế diện rộng', emoji: '⚓' },
         { label: 'Enigmatic Staff', value: 'Enigmatic Staff', description: 'Tạo giáp bảo kê', emoji: '🛡️' },
@@ -53,13 +53,16 @@ function buildWeaponSelectMenu(eventId, role) {
 }
 
 function buildEventMessage(event, signups = [], currentRole = null) {
-  // Tiêu đề IN HOA toàn bộ, căn giữa bằng cách tối ưu khoảng trắng và khung đường kẻ
+  // Tiêu đề IN HOA toàn bộ, nằm trực tiếp ở tiêu đề Embed, cực kỳ sạch sẽ và chuyên nghiệp
   const uppercaseTitle = (event.title || '').toUpperCase();
-  const titleBlock = `\`\`\`fix\n       🏰 ${uppercaseTitle} 🏰       \`\`\``;
 
   const embed = new EmbedBuilder()
-    .setColor(0xAA8833) // Màu Vàng Đồng Albion
-    .setDescription(`${titleBlock}${event.description ? `\n*${event.description}*\n` : ''}`);
+    .setColor(0xAA8833) // Vàng Đồng Albion
+    .setTitle(`⚔️ [ ${uppercaseTitle} ] ⚔️`);
+
+  if (event.description) {
+    embed.setDescription(`*${event.description}*`);
+  }
 
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });

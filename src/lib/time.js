@@ -46,7 +46,7 @@ function parseTimeString(timeStr) {
 }
 
 /**
- * Chuyển đổi ngày & giờ nhập vào thành Unix Timestamp
+ * Chuyển đổi ngày & giờ nhập vào thành Millisecond Timestamp chuẩn JS
  */
 function parseEventTime(dateStr, timeStr, timezone = 'Asia/Ho_Chi_Minh') {
   const timeParsed = parseTimeString(timeStr);
@@ -87,16 +87,19 @@ function parseEventTime(dateStr, timeStr, timezone = 'Asia/Ho_Chi_Minh') {
 
   return {
     valid: true,
-    startTs: Math.floor(eventDt.toSeconds()),
+    // ĐÃ SỬA: Trả về Milliseconds (toMillis) để khớp với JS Date/setTimeout
+    startTs: eventDt.toMillis(),
   };
 }
 
 /**
- * Định dạng Unix Timestamp sang thẻ hiển thị thời gian của Discord (<t:timestamp:style>)
+ * Định dạng Timestamp sang thẻ hiển thị thời gian của Discord (<t:timestamp:style>)
  */
 function discordTime(timestamp, style = 't') {
   if (!timestamp) return '';
-  return `<t:${timestamp}:${style}>`;
+  // Tự động nhận diện nếu timestamp là Mili-giây thì đổi sang Giây cho Discord
+  const seconds = timestamp > 10000000000 ? Math.floor(timestamp / 1000) : timestamp;
+  return `<t:${seconds}:${style}>`;
 }
 
 /**
@@ -104,7 +107,8 @@ function discordTime(timestamp, style = 't') {
  */
 function formatLocalParts(timestamp, timezone = 'Asia/Ho_Chi_Minh') {
   if (!timestamp) return { date: '', time: '' };
-  const dt = DateTime.fromSeconds(timestamp).setZone(timezone);
+  const millis = timestamp < 10000000000 ? timestamp * 1000 : timestamp;
+  const dt = DateTime.fromMillis(millis).setZone(timezone);
   return {
     date: dt.toFormat('yyyy-MM-dd'),
     time: dt.toFormat('HH:mm'),
@@ -115,7 +119,8 @@ function formatLocalParts(timestamp, timezone = 'Asia/Ho_Chi_Minh') {
  * Tạo đường dẫn thêm sự kiện vào Google Calendar
  */
 function googleCalendarLink({ title, startTs, durationMin = 120, details }) {
-  const startDt = DateTime.fromSeconds(startTs).toUTC();
+  const millis = startTs < 10000000000 ? startTs * 1000 : startTs;
+  const startDt = DateTime.fromMillis(millis).toUTC();
   const endDt = startDt.plus({ minutes: durationMin });
 
   const fmt = (dt) => dt.toFormat("yyyyMMdd'T'HHmmss'Z'");

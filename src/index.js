@@ -34,8 +34,8 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
-// Cấu hình ID kênh lưu trữ build từ kho moderator-only của bạn
-const MODERATOR_CHANNEL_ID = '1352408303371812865';
+// Cấu hình ID kênh lưu trữ build từ kho moderator-only của bạn (Đã cập nhật chuẩn)
+const MODERATOR_CHANNEL_ID = '1352408303371812868';
 
 // Quản lý danh sách phòng, bộ đếm dọn dẹp và chống spam DM
 const managedEventRooms = new Set();

@@ -4,6 +4,7 @@ const { discordTime, googleCalendarLink } = require('./time');
 // Bản đồ tra cứu Custom Emoji chuẩn từ các ảnh bạn đã tải lên server Discord
 const WEAPON_EMOJIS = {
   'Dreadstorm Monarch': '<:EldersDreadstormMonarch:1560414109680541797>',
+  'Incubus Mace': '🛡️',
   'Heavy Mace': '<:EldersHeavyMace:1560414517995901138>',
   'Crystal Reaper': '<:EldersCrystalReaper:1560415626898571385>',
   'Hallowfall': '<:EldersHallowfall:1560415652945072220>',
@@ -25,13 +26,14 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: 'Dreadstorm Monarch', value: 'Dreadstorm Monarch', description: 'Tank chuyên dụng ZvZ', emoji: WEAPON_EMOJIS['Dreadstorm Monarch'] },
-        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực', emoji: WEAPON_EMOJIS['Heavy Mace'] },
+        { label: 'Incubus Mace', value: 'Incubus Mace', description: 'Gia tăng sát thương dồn & giảm giáp địch', emoji: '🛡️' },
+        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực & câm lặng', emoji: WEAPON_EMOJIS['Heavy Mace'] },
       ]);
   } else if (roleUpper === 'DPS') {
     selectMenu
       .setPlaceholder('⚔️ Chọn Vũ khí DPS của bạn...')
       .addOptions([
+        { label: 'Dreadstorm Monarch', value: 'Dreadstorm Monarch', description: 'DPS Bruiser cận chiến ZvZ cực mạnh', emoji: WEAPON_EMOJIS['Dreadstorm Monarch'] },
         { label: 'Crystal Reaper', value: 'Crystal Reaper', description: 'Sát thương diện rộng chí mạng', emoji: WEAPON_EMOJIS['Crystal Reaper'] },
         { label: 'Lightcaller', value: 'Lightcaller', description: 'Cấu rỉa tầm xa', emoji: WEAPON_EMOJIS['Lightcaller'] },
         { label: 'Hellspawn Staff', value: 'Hellspawn Staff', description: 'Sát thương lửa cực mạnh', emoji: WEAPON_EMOJIS['Hellspawn Staff'] },

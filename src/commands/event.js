@@ -18,7 +18,7 @@ module.exports = {
           opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true)
         )
         .addStringOption((opt) =>
-          opt.setName('description').setDescription('Ghi chú / Yêu cầu IP (tùy chọn)').setRequired(false)
+          opt.setName('description').setDescription('Ghi chú / Yêu cầu IP (Không bắt buộc)').setRequired(false)
         )
     )
     .addSubcommand((sub) =>
@@ -55,7 +55,7 @@ module.exports = {
 
         const title = interaction.options.getString('title');
         const timeStr = interaction.options.getString('time');
-        const description = interaction.options.getString('description') || null;
+        const description = interaction.options.getString('description') || null; // Tùy chọn không bắt buộc
 
         // Tự động truyền 'today' làm ngày mặc định với múi giờ Asia/Ho_Chi_Minh
         const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
@@ -80,7 +80,7 @@ module.exports = {
         const signups = db.getSignups(eventId);
         const msgData = buildEventMessage(event, signups);
 
-        // 2. GỬI TIN NHẮN EMBED CHÍNH VÀO KÊNH (Đã bỏ hoàn toàn tin nhắn ping @everyone)
+        // 2. GỬI TIN NHẮN EMBED CHÍNH VÀO KÊNH (Đã bỏ hoàn toàn phần ping @everyone)
         const sent = await interaction.channel.send(msgData);
         db.setEventMessage(eventId, sent.id);
         event.message_id = sent.id;
@@ -95,7 +95,7 @@ module.exports = {
           interaction.client.scheduleEventRoomCreation(interaction.client, event);
         }
 
-        // Phản hồi riêng cho Trưởng đoàn
+        // Phản hồi riêng cho người tạo sự kiện
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
 
       } catch (err) {

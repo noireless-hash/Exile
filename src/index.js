@@ -40,7 +40,7 @@ const MODERATOR_CHANNEL_ID = '1352408303371812865';
 // Quản lý danh sách phòng, bộ đếm dọn dẹp và chống spam DM
 const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
-const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user
+const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user theo key: eventId_userId
 
 /**
  * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
@@ -48,7 +48,9 @@ const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user
  */
 function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, isStartup = false) {
   const now = Date.now();
-  const expirationTime = startTimestamp + (15 * 60 * 1000); // Giờ hẹn + 15 phút
+  // Đảm bảo startTimestamp chuẩn ms
+  const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
+  const expirationTime = millis + (15 * 60 * 1000); // Giờ hẹn + 15 phút
   const delay = expirationTime - now;
 
   // CHỈ NẾU LÀ LÚC BOT KHỞI ĐỘNG LẠI VÀ ĐÃ QUÁ THỜI GIAN -> Mới xóa ngay lập tức
@@ -91,9 +93,16 @@ function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, is
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
-  const delay = event.start_ts - now;
+  const millis = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
+  const delay = millis - now;
 
-  if (delay <= 0) return;
+  // Nếu sự kiện đã diễn ra quá 15 phút thì không tạo nữa
+  if (delay < -15 * 60 * 1000) {
+    return;
+  }
+
+  // Nếu đã tới giờ hoặc trễ trong khoảng 15 phút -> Chạy ngay lập tức (executionDelay = 0)
+  const executionDelay = Math.max(0, delay);
 
   setTimeout(async () => {
     try {
@@ -154,13 +163,15 @@ function scheduleEventRoomCreation(client, event) {
       const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
       let modMessages = [];
       if (modChannel) {
-        modMessages = (await modChannel.messages.fetch({ limit: 50 })).values();
+        const fetched = await modChannel.messages.fetch({ limit: 50 }).catch(() => null);
+        if (fetched) modMessages = Array.from(fetched.values());
       }
 
       for (const memberSignup of attendingMembers) {
         try {
-          // KIỂM TRA CHỐNG SPAM: Nếu đã gửi build cho user này rồi thì bỏ qua
-          if (sentBuildUsers.has(memberSignup.user_id)) {
+          const userKey = `${event.id}_${memberSignup.user_id}`;
+          // KIỂM TRA CHỐNG SPAM: Nếu đã gửi build cho user này ở event này rồi thì bỏ qua
+          if (sentBuildUsers.has(userKey)) {
             continue;
           }
 
@@ -215,7 +226,7 @@ function scheduleEventRoomCreation(client, event) {
 
           // Dự phòng nếu không khớp điểm: lấy ảnh build mới nhất
           if (!bestMatchUrl && modMessages.length > 0) {
-            const fallbackMsg = Array.from(modMessages).find(msg => msg.attachments.size > 0 || msg.embeds.some(e => e.image));
+            const fallbackMsg = modMessages.find(msg => msg.attachments.size > 0 || msg.embeds.some(e => e.image));
             if (fallbackMsg) {
               bestMatchUrl = fallbackMsg.attachments.size > 0 ? fallbackMsg.attachments.first().url : fallbackMsg.embeds[0].image.url;
             }
@@ -235,11 +246,8 @@ function scheduleEventRoomCreation(client, event) {
 
           await member.send(dmPayload);
 
-          // Đánh dấu đã gửi thành công để chống spam trong 24 giờ
-          sentBuildUsers.add(memberSignup.user_id);
-          setTimeout(() => {
-            sentBuildUsers.delete(memberSignup.user_id);
-          }, 24 * 60 * 60 * 1000);
+          // Đánh dấu đã gửi thành công
+          sentBuildUsers.add(userKey);
 
           // Nghỉ nhẹ 0.5 giây giữa mỗi lần gửi DM để tránh bị Discord giới hạn (Rate Limit)
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -252,7 +260,7 @@ function scheduleEventRoomCreation(client, event) {
     } catch (error) {
       console.error(`Lỗi khi xử lý giờ hẹn cho sự kiện #${event.id}:`, error);
     }
-  }, delay);
+  }, executionDelay);
 }
 
 // Gắn hàm vào client để gọi từ bên ngoài
@@ -262,7 +270,7 @@ client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
-  // Khôi phục lịch hẹn khi bot khởi động lại (Truyền true để quét dọn dẹp các event cũ quá hạn)
+  // Khôi phục lịch hẹn khi bot khởi động lại
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {

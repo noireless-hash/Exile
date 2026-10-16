@@ -43,21 +43,22 @@ const emptyRoomTimeouts = new Map();
 const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user
 
 /**
- * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút (Đã cập nhật tự động xóa ngay khi quá hạn)
+ * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
+ * @param {boolean} isStartup - true nếu gọi lúc bot khởi động lại (để dọn dẹp rác cũ), false nếu vừa tạo event mới
  */
-function scheduleEventExpiration(channel, messageId, eventId, startTimestamp) {
+function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, isStartup = false) {
   const now = Date.now();
   const expirationTime = startTimestamp + (15 * 60 * 1000); // Giờ hẹn + 15 phút
   const delay = expirationTime - now;
 
-  // NẾU ĐÃ QUÁ THỜI GIAN HẾT HẠN (Ví dụ: bot bị restart sau giờ hẹn), XÓA NGAY LẬP TỨC!
-  if (delay <= 0) {
+  // CHỈ NẾU LÀ LÚC BOT KHỞI ĐỘNG LẠI VÀ ĐÃ QUÁ THỜI GIAN -> Mới xóa ngay lập tức
+  if (isStartup && delay <= 0) {
     (async () => {
       try {
         const message = await channel.messages.fetch(messageId).catch(() => null);
         if (message) {
           await message.delete();
-          console.log(`🗑️ [Xóa ngay] Đã xóa tin nhắn sự kiện quá hạn #${eventId}.`);
+          console.log(`🗑️ [Xóa ngay lúc khởi động] Đã xóa tin nhắn sự kiện quá hạn #${eventId}.`);
         }
       } catch (error) {
         console.error(`Không thể xóa tin nhắn sự kiện quá hạn #${eventId}:`, error);
@@ -66,7 +67,12 @@ function scheduleEventExpiration(channel, messageId, eventId, startTimestamp) {
     return;
   }
 
-  // Nếu chưa đến giờ hết hạn -> Hẹn giờ xóa bình thường
+  // NẾU VỪA MỚI TẠO MÀ DELAY <= 0 -> Không tự ý xóa nhầm, bỏ qua
+  if (delay <= 0) {
+    return;
+  }
+
+  // Hẹn giờ xóa bình thường khi đến đúng mốc (Giờ hẹn + 15 phút)
   setTimeout(async () => {
     try {
       const message = await channel.messages.fetch(messageId).catch(() => null);
@@ -256,14 +262,14 @@ client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
-  // Khôi phục lịch hẹn khi bot khởi động lại
+  // Khôi phục lịch hẹn khi bot khởi động lại (Truyền true để quét dọn dẹp các event cũ quá hạn)
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {
       if (event.channel_id && event.message_id && event.start_ts) {
         const channel = await client.channels.fetch(event.channel_id).catch(() => null);
         if (channel) {
-          scheduleEventExpiration(channel, event.message_id, event.id, event.start_ts);
+          scheduleEventExpiration(channel, event.message_id, event.id, event.start_ts, true);
           scheduleEventRoomCreation(client, event);
         }
       }

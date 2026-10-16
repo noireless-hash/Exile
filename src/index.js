@@ -19,9 +19,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.GuildVoiceStates, // Bắt buộc để theo dõi voice channel
+    GatewayIntentBits.GuildVoiceStates,
   ],
-  // Tự động dọn dẹp message cũ trong RAM định kỳ để tiết kiệm tài nguyên VPS
   sweepers: {
     ...Options.DefaultSweeperSettings,
     messages: {
@@ -34,25 +33,22 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
-// Cấu hình ID kênh lưu trữ build chuẩn từ kho moderator-only của bạn
+// Cấu hình ID kênh lưu trữ build chuẩn
 const MODERATOR_CHANNEL_ID = '1352408303371812868';
 
-// Quản lý danh sách phòng, bộ đếm dọn dẹp và chống spam DM
 const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
-const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user theo key: eventId_userId
+const sentBuildUsers = new Set();
 
 /**
  * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
  */
 function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, isStartup = false) {
   const now = Date.now();
-  // Tự động quy đổi startTimestamp về Mili-giây nếu nó đang bị lưu dạng Giây
   const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
-  const expirationTime = millis + (15 * 60 * 1000); // Giờ hẹn + 15 phút
+  const expirationTime = millis + (15 * 60 * 1000);
   const delay = expirationTime - now;
 
-  // NẾU ĐÃ QuÁ 15 PHÚT KỂ TỪ GIỜ HẸN -> Xóa ngay lập tức!
   if (delay <= 0) {
     (async () => {
       try {
@@ -68,7 +64,6 @@ function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, is
     return;
   }
 
-  // Hẹn giờ xóa bình thường khi đến đúng mốc (Giờ hẹn + 15 phút)
   setTimeout(async () => {
     try {
       const message = await channel.messages.fetch(messageId).catch(() => null);
@@ -83,22 +78,21 @@ function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, is
 }
 
 /**
- * 2. Tự động tạo phòng thoại khi đến giờ hẹn, phân quyền và gửi build riêng thông minh cho từng thành viên
+ * 2. Tự động tạo phòng thoại khi đến giờ hẹn và gửi đúng build riêng cho từng thành viên
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
   const millis = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
   const delay = millis - now;
 
-  // Nếu sự kiện đã diễn ra quá 15 phút thì không tạo nữa
   if (delay < -15 * 60 * 1000) {
     return;
   }
 
-  // Nếu đã tới giờ hoặc trễ trong khoảng 15 phút -> Chạy ngay lập tức (executionDelay = 0)
   const executionDelay = Math.max(0, delay);
 
   setTimeout(async () => {
+    let createdChannelId = null;
     try {
       const guild = await client.guilds.fetch(event.guild_id).catch(() => null);
       if (!guild) return;
@@ -134,14 +128,15 @@ function scheduleEventRoomCreation(client, event) {
       const roomName = `⚔️│${event.title}`.toLowerCase().replace(/\s+/g, '-');
       const createdChannel = await guild.channels.create({
         name: roomName,
-        type: 2, // Voice Channel
+        type: 2,
         permissionOverwrites: permissionOverwrites,
       });
 
+      createdChannelId = createdChannel.id;
       managedEventRooms.add(createdChannel.id);
       console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
-      // Thông báo chung ngắn gọn trong phòng mới tạo
+      // Thông báo chung trong phòng voice
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
@@ -153,7 +148,7 @@ function scheduleEventRoomCreation(client, event) {
         console.error('Không thể gửi thông báo trong voice channel.');
       }
 
-      // --- QUÉT KÊNH MODERATOR-ONLY ĐỂ GỬI BUILD RIÊNG CHO TỪNG THÀNH VIÊN ---
+      // --- QUÉT KÊNH MODERATOR-ONLY ĐỂ TÌM VÀ GỬI ĐÚNG BUILD RIÊNG CHO TỪNG THÀNH VIÊN ---
       const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
       let modMessages = [];
       if (modChannel) {
@@ -164,7 +159,6 @@ function scheduleEventRoomCreation(client, event) {
       for (const memberSignup of attendingMembers) {
         try {
           const userKey = `${event.id}_${memberSignup.user_id}`;
-          // KIỂM TRA CHỐNG SPAM: Nếu đã gửi build cho user này ở event này rồi thì bỏ qua
           if (sentBuildUsers.has(userKey)) {
             continue;
           }
@@ -174,12 +168,11 @@ function scheduleEventRoomCreation(client, event) {
 
           const userRole = (memberSignup.role || '').trim().toLowerCase();
           const userWeapon = (memberSignup.job || '').trim().toLowerCase();
-          const eventTitle = (event.title || '').trim().toLowerCase();
 
           let bestMatchUrl = null;
           let highestScore = -1;
 
-          // Thuật toán chấm điểm thông minh tìm ảnh build chuẩn
+          // THUẬT TOÁN TÌM RIÊNG ẢNH CHO TỪNG USER DỰA TRÊN VŨ KHÍ/ROLE ĐĂNG KÝ
           for (const msg of modMessages) {
             let score = 0;
             const content = (msg.content || '').toLowerCase();
@@ -190,22 +183,13 @@ function scheduleEventRoomCreation(client, event) {
             const hasImage = msg.attachments.size > 0 || (msg.embeds.length > 0 && msg.embeds[0].image);
             if (!hasImage) continue;
 
-            // Khớp chính xác tên vũ khí/job (Điểm cao nhất)
+            // Khớp chính xác tên vũ khí/job (Ưu tiên cực cao)
             if (userWeapon && fullText.includes(userWeapon)) {
-              score += 10;
+              score += 20;
             }
             // Khớp loại Role (Tank, Healer, DPS, Support)
             if (userRole && fullText.includes(userRole)) {
               score += 5;
-            }
-            // Khớp từ khóa tên sự kiện
-            if (eventTitle) {
-              const titleKeywords = eventTitle.split(' ');
-              for (const keyword of titleKeywords) {
-                if (keyword.length > 2 && fullText.includes(keyword)) {
-                  score += 3;
-                }
-              }
             }
 
             if (score > highestScore) {
@@ -218,7 +202,7 @@ function scheduleEventRoomCreation(client, event) {
             }
           }
 
-          // Dự phòng nếu không khớp điểm: lấy ảnh build mới nhất
+          // Fallback nếu user chưa chọn vũ khí: lấy ảnh bất kỳ có trong kho
           if (!bestMatchUrl && modMessages.length > 0) {
             const fallbackMsg = modMessages.find(msg => msg.attachments.size > 0 || msg.embeds.some(e => e.image));
             if (fallbackMsg) {
@@ -226,11 +210,12 @@ function scheduleEventRoomCreation(client, event) {
             }
           }
 
-          // Soạn nội dung DM gửi cho user
+          // Soạn nội dung DM chuẩn xác có gắn đúng ID phòng thoại
+          const channelMention = createdChannelId ? `<#${createdChannelId}>` : 'Phòng thoại sự kiện';
           const dmPayload = {
             content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
                      `Role của bạn: **${memberSignup.role || 'Chưa rõ'}** | Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
-                     `Phòng thoại riêng đã sẵn sàng: <#${createdChannel.id}>\n` +
+                     `Phòng thoại riêng đã sẵn sàng: ${channelMention}\n` +
                      `Dưới đây là **Build chuẩn** dành riêng cho nhiệm vụ của bạn:`
           };
 
@@ -239,15 +224,12 @@ function scheduleEventRoomCreation(client, event) {
           }
 
           await member.send(dmPayload);
-
-          // Đánh dấu đã gửi thành công
           sentBuildUsers.add(userKey);
 
-          // Nghỉ nhẹ 0.5 giây giữa mỗi lần gửi DM để tránh bị Discord giới hạn (Rate Limit)
           await new Promise(resolve => setTimeout(resolve, 500));
 
         } catch (err) {
-          console.error(`Không thể gửi DM cho user ${memberSignup.user_id} (có thể họ chặn tin nhắn riêng).`);
+          console.error(`Không thể gửi DM cho user ${memberSignup.user_id}:`, err);
         }
       }
 
@@ -257,14 +239,12 @@ function scheduleEventRoomCreation(client, event) {
   }, executionDelay);
 }
 
-// Gắn hàm vào client để gọi từ bên ngoài
 client.scheduleEventExpiration = scheduleEventExpiration;
 client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
-  // Khôi phục lịch hẹn và dọn dẹp tin nhắn cũ khi bot khởi động lại
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {
@@ -289,7 +269,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     const oldChannelId = oldState.channelId;
     const newChannelId = newState.channelId;
 
-    // Khi có người bước vào phòng -> Hủy lịch hẹn xóa
     if (newChannelId && managedEventRooms.has(newChannelId)) {
       if (emptyRoomTimeouts.has(newChannelId)) {
         clearTimeout(emptyRoomTimeouts.get(newChannelId));
@@ -297,12 +276,10 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       }
     }
 
-    // Khi có người rời phòng và phòng trở nên trống trơn
     if (oldChannelId && managedEventRooms.has(oldChannelId)) {
       const channel = oldState.channel;
       if (channel && channel.members.size === 0) {
         if (!emptyRoomTimeouts.has(oldChannelId)) {
-          // Chờ 10 giây sau khi phòng trống mới tự động xóa
           const timeoutId = setTimeout(async () => {
             try {
               const currentChannel = await channel.guild.channels.fetch(oldChannelId).catch(() => null);
@@ -315,7 +292,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
               console.error('Lỗi khi xóa phòng trống:', err);
             }
             emptyRoomTimeouts.delete(oldChannelId);
-          }, 10 * 1000); // 10 giây
+          }, 10 * 1000);
 
           emptyRoomTimeouts.set(oldChannelId, timeoutId);
         }

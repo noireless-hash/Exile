@@ -80,34 +80,23 @@ module.exports = {
         const signups = db.getSignups(eventId);
         const msgData = buildEventMessage(event, signups);
 
-        // Gửi tin nhắn sự kiện chính vào kênh chat
+        // 2. GỬI TIN NHẮN EMBED CHÍNH VÀO KÊNH (Đã bỏ hoàn toàn tin nhắn ping @everyone)
         const sent = await interaction.channel.send(msgData);
         db.setEventMessage(eventId, sent.id);
-
-        // Cập nhật lại đối tượng event với message_id mới tạo
         event.message_id = sent.id;
 
-        // --- PING TẤT CẢ THÀNH VIÊN (@everyone) ĐỂ VÀO FILL ROLE MỚI TẠO ---
-        try {
-          await interaction.channel.send({
-            content: `📢 @everyone **SỰ KIỆN MỚI DÀNH CHO ANH EM:** **[${event.title}]** vào lúc **${timeStr}**!\n` +
-                     `👉 Mời các chiến hữu nhanh chóng chọn vị trí (**Tank, DPS, Healer, Support**) và đăng ký vũ khí phía trên!`
-          });
-        } catch (pingErr) {
-          console.error('Lỗi khi gửi ping @everyone:', pingErr);
-        }
-
-        // 2. Kích hoạt hẹn giờ tự động xóa tin nhắn sự kiện sau 15 phút kể từ giờ hẹn
+        // 3. HẸN GIỜ TỰ ĐỘNG XÓA TIN NHẮN EMBED CHÍNH SAU 15 PHÚT KỂ TỪ GIỜ HẸN
         if (typeof interaction.client.scheduleEventExpiration === 'function') {
           interaction.client.scheduleEventExpiration(interaction.channel, sent.id, eventId, event.start_ts);
         }
 
-        // 3. Kích hoạt hẹn giờ tạo phòng thoại & gửi Build riêng qua DM khi đến giờ
+        // 4. HẸN GIỜ TẠO PHÒNG VOICE & GỬI BUILD QUA DM
         if (typeof interaction.client.scheduleEventRoomCreation === 'function') {
           interaction.client.scheduleEventRoomCreation(interaction.client, event);
         }
 
-        return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công và thông báo tới tất cả thành viên!` });
+        // Phản hồi riêng cho Trưởng đoàn
+        return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
 
       } catch (err) {
         console.error('Lỗi khi tạo event:', err);

@@ -41,40 +41,36 @@ const emptyRoomTimeouts = new Map();
 const sentBuildUsers = new Set();
 
 /**
- * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
+ * 1. QUÉT THỜI GIAN THỰC (REAL-TIME CLEANUP): Kiểm tra liên tục mỗi 30 giây
+ * Nếu thời gian thực tế > (Giờ sự kiện bắt đầu + 15 phút) -> Tự động xóa bài đăng!
  */
-function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, isStartup = false) {
-  const now = Date.now();
-  const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
-  const expirationTime = millis + (15 * 60 * 1000);
-  const delay = expirationTime - now;
+async function cleanupExpiredEventsRealtime(client) {
+  try {
+    const allEvents = db.getAllEvents ? db.getAllEvents() : [];
+    const now = Date.now();
 
-  if (delay <= 0) {
-    (async () => {
-      try {
-        const message = await channel.messages.fetch(messageId).catch(() => null);
-        if (message) {
-          await message.delete();
-          console.log(`🗑️ Đã xóa ngay lập tức tin nhắn sự kiện quá hạn #${eventId}.`);
+    for (const event of allEvents) {
+      if (!event.channel_id || !event.message_id || !event.start_ts) continue;
+
+      // Quy đổi start_ts sang chuẩn ms
+      const millis = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
+      const expirationTime = millis + (15 * 60 * 1000); // Giờ hẹn thực tế + 15 phút
+
+      // SO SÁNH THỜI GIAN THỰC
+      if (now >= expirationTime) {
+        const channel = await client.channels.fetch(event.channel_id).catch(() => null);
+        if (channel) {
+          const message = await channel.messages.fetch(event.message_id).catch(() => null);
+          if (message) {
+            await message.delete().catch(() => {});
+            console.log(`🗑️ [Thời gian thực] Đã tự động xóa bài đăng sự kiện #${event.id} (${event.title}) do quá mốc 15 phút!`);
+          }
         }
-      } catch (error) {
-        console.error(`Không thể xóa tin nhắn sự kiện quá hạn #${eventId}:`, error);
       }
-    })();
-    return;
-  }
-
-  setTimeout(async () => {
-    try {
-      const message = await channel.messages.fetch(messageId).catch(() => null);
-      if (message) {
-        await message.delete();
-        console.log(`🗑️ Đã tự động xóa sự kiện #${eventId} sau 15 phút kể từ giờ hẹn.`);
-      }
-    } catch (error) {
-      console.error(`Không thể tự động xóa tin nhắn sự kiện #${eventId}:`, error);
     }
-  }, delay);
+  } catch (err) {
+    console.error('Lỗi khi thực thi bộ quét thời gian thực:', err);
+  }
 }
 
 /**
@@ -183,11 +179,9 @@ function scheduleEventRoomCreation(client, event) {
             const hasImage = msg.attachments.size > 0 || (msg.embeds.length > 0 && msg.embeds[0].image);
             if (!hasImage) continue;
 
-            // Khớp chính xác tên vũ khí/job (Ưu tiên cực cao)
             if (userWeapon && fullText.includes(userWeapon)) {
               score += 20;
             }
-            // Khớp loại Role (Tank, Healer, DPS, Support)
             if (userRole && fullText.includes(userRole)) {
               score += 5;
             }
@@ -202,7 +196,6 @@ function scheduleEventRoomCreation(client, event) {
             }
           }
 
-          // Fallback nếu user chưa chọn vũ khí: lấy ảnh bất kỳ có trong kho
           if (!bestMatchUrl && modMessages.length > 0) {
             const fallbackMsg = modMessages.find(msg => msg.attachments.size > 0 || msg.embeds.some(e => e.image));
             if (fallbackMsg) {
@@ -210,7 +203,6 @@ function scheduleEventRoomCreation(client, event) {
             }
           }
 
-          // Soạn nội dung DM chuẩn xác có gắn đúng ID phòng thoại
           const channelMention = createdChannelId ? `<#${createdChannelId}>` : 'Phòng thoại sự kiện';
           const dmPayload = {
             content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
@@ -239,21 +231,25 @@ function scheduleEventRoomCreation(client, event) {
   }, executionDelay);
 }
 
-client.scheduleEventExpiration = scheduleEventExpiration;
 client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
+  // 1. Chạy kiểm tra xóa bài viết quá hạn lập tức khi bot mở
+  await cleanupExpiredEventsRealtime(client);
+
+  // 2. Kích hoạt bộ quét tự động chạy liên tục mỗi 30 giây theo thời gian thực
+  setInterval(() => {
+    cleanupExpiredEventsRealtime(client);
+  }, 30 * 1000);
+
+  // 3. Khôi phục hẹn giờ tạo room voice
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {
       if (event.channel_id && event.message_id && event.start_ts) {
-        const channel = await client.channels.fetch(event.channel_id).catch(() => null);
-        if (channel) {
-          scheduleEventExpiration(channel, event.message_id, event.id, event.start_ts, true);
-          scheduleEventRoomCreation(client, event);
-        }
+        scheduleEventRoomCreation(client, event);
       }
     }
   } catch (err) {

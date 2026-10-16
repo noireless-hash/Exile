@@ -43,15 +43,30 @@ const emptyRoomTimeouts = new Map();
 const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user
 
 /**
- * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
+ * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút (Đã cập nhật tự động xóa ngay khi quá hạn)
  */
 function scheduleEventExpiration(channel, messageId, eventId, startTimestamp) {
   const now = Date.now();
-  const expirationTime = startTimestamp + (15 * 60 * 1000);
+  const expirationTime = startTimestamp + (15 * 60 * 1000); // Giờ hẹn + 15 phút
   const delay = expirationTime - now;
 
-  if (delay <= 0) return;
+  // NẾU ĐÃ QUÁ THỜI GIAN HẾT HẠN (Ví dụ: bot bị restart sau giờ hẹn), XÓA NGAY LẬP TỨC!
+  if (delay <= 0) {
+    (async () => {
+      try {
+        const message = await channel.messages.fetch(messageId).catch(() => null);
+        if (message) {
+          await message.delete();
+          console.log(`🗑️ [Xóa ngay] Đã xóa tin nhắn sự kiện quá hạn #${eventId}.`);
+        }
+      } catch (error) {
+        console.error(`Không thể xóa tin nhắn sự kiện quá hạn #${eventId}:`, error);
+      }
+    })();
+    return;
+  }
 
+  // Nếu chưa đến giờ hết hạn -> Hẹn giờ xóa bình thường
   setTimeout(async () => {
     try {
       const message = await channel.messages.fetch(messageId).catch(() => null);

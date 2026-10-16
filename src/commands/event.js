@@ -80,12 +80,22 @@ module.exports = {
         const signups = db.getSignups(eventId);
         const msgData = buildEventMessage(event, signups);
 
-        // Gửi tin nhắn sự kiện vào kênh chat
+        // Gửi tin nhắn sự kiện chính vào kênh chat
         const sent = await interaction.channel.send(msgData);
         db.setEventMessage(eventId, sent.id);
 
         // Cập nhật lại đối tượng event với message_id mới tạo
         event.message_id = sent.id;
+
+        // --- PING TẤT CẢ THÀNH VIÊN (@everyone) ĐỂ VÀO FILL ROLE MỚI TẠO ---
+        try {
+          await interaction.channel.send({
+            content: `📢 @everyone **SỰ KIỆN MỚI DÀNH CHO ANH EM:** **[${event.title}]** vào lúc **${timeStr}**!\n` +
+                     `👉 Mời các chiến hữu nhanh chóng chọn vị trí (**Tank, DPS, Healer, Support**) và đăng ký vũ khí phía trên!`
+          });
+        } catch (pingErr) {
+          console.error('Lỗi khi gửi ping @everyone:', pingErr);
+        }
 
         // 2. Kích hoạt hẹn giờ tự động xóa tin nhắn sự kiện sau 15 phút kể từ giờ hẹn
         if (typeof interaction.client.scheduleEventExpiration === 'function') {
@@ -97,7 +107,7 @@ module.exports = {
           interaction.client.scheduleEventRoomCreation(interaction.client, event);
         }
 
-        return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
+        return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công và thông báo tới tất cả thành viên!` });
 
       } catch (err) {
         console.error('Lỗi khi tạo event:', err);

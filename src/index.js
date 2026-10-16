@@ -34,7 +34,7 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
-// Cấu hình ID kênh lưu trữ build từ kho moderator-only của bạn (Đã cập nhật chuẩn)
+// Cấu hình ID kênh lưu trữ build chuẩn từ kho moderator-only của bạn
 const MODERATOR_CHANNEL_ID = '1352408303371812868';
 
 // Quản lý danh sách phòng, bộ đếm dọn dẹp và chống spam DM
@@ -44,33 +44,27 @@ const sentBuildUsers = new Set(); // Chống spam gửi lặp build cho user the
 
 /**
  * 1. Tự động xóa tin nhắn sự kiện sau thời gian diễn ra + 15 phút
- * @param {boolean} isStartup - true nếu gọi lúc bot khởi động lại (để dọn dẹp rác cũ), false nếu vừa tạo event mới
  */
 function scheduleEventExpiration(channel, messageId, eventId, startTimestamp, isStartup = false) {
   const now = Date.now();
-  // Đảm bảo startTimestamp chuẩn ms
+  // Tự động quy đổi startTimestamp về Mili-giây nếu nó đang bị lưu dạng Giây
   const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
   const expirationTime = millis + (15 * 60 * 1000); // Giờ hẹn + 15 phút
   const delay = expirationTime - now;
 
-  // CHỈ NẾU LÀ LÚC BOT KHỞI ĐỘNG LẠI VÀ ĐÃ QUÁ THỜI GIAN -> Mới xóa ngay lập tức
-  if (isStartup && delay <= 0) {
+  // NẾU ĐÃ QuÁ 15 PHÚT KỂ TỪ GIỜ HẸN -> Xóa ngay lập tức!
+  if (delay <= 0) {
     (async () => {
       try {
         const message = await channel.messages.fetch(messageId).catch(() => null);
         if (message) {
           await message.delete();
-          console.log(`🗑️ [Xóa ngay lúc khởi động] Đã xóa tin nhắn sự kiện quá hạn #${eventId}.`);
+          console.log(`🗑️ Đã xóa ngay lập tức tin nhắn sự kiện quá hạn #${eventId}.`);
         }
       } catch (error) {
         console.error(`Không thể xóa tin nhắn sự kiện quá hạn #${eventId}:`, error);
       }
     })();
-    return;
-  }
-
-  // NẾU VỪA MỚI TẠO MÀ DELAY <= 0 -> Không tự ý xóa nhầm, bỏ qua
-  if (delay <= 0) {
     return;
   }
 
@@ -270,7 +264,7 @@ client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 client.once('ready', async () => {
   console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
-  // Khôi phục lịch hẹn khi bot khởi động lại
+  // Khôi phục lịch hẹn và dọn dẹp tin nhắn cũ khi bot khởi động lại
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
     for (const event of allEvents) {
@@ -288,14 +282,14 @@ client.once('ready', async () => {
 });
 
 /**
- * 3. Tự động dọn dẹp phòng thoại thông minh (Thời gian chờ 10 phút cho người vào trễ)
+ * 3. Tự động dọn dẹp phòng thoại trống sau 10 giây
  */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
     const oldChannelId = oldState.channelId;
     const newChannelId = newState.channelId;
 
-    // Khi có người bước vào phòng -> Hủy lịch hẹn xóa (nếu có) vì đã có người vào trễ
+    // Khi có người bước vào phòng -> Hủy lịch hẹn xóa
     if (newChannelId && managedEventRooms.has(newChannelId)) {
       if (emptyRoomTimeouts.has(newChannelId)) {
         clearTimeout(emptyRoomTimeouts.get(newChannelId));
@@ -308,6 +302,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       const channel = oldState.channel;
       if (channel && channel.members.size === 0) {
         if (!emptyRoomTimeouts.has(oldChannelId)) {
+          // Chờ 10 giây sau khi phòng trống mới tự động xóa
           const timeoutId = setTimeout(async () => {
             try {
               const currentChannel = await channel.guild.channels.fetch(oldChannelId).catch(() => null);
@@ -320,7 +315,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
               console.error('Lỗi khi xóa phòng trống:', err);
             }
             emptyRoomTimeouts.delete(oldChannelId);
-          }, 10 * 60 * 1000); // 10 phút chờ người vào trễ
+          }, 10 * 1000); // 10 giây
 
           emptyRoomTimeouts.set(oldChannelId, timeoutId);
         }

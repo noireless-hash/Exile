@@ -3,6 +3,9 @@ const db = require('../db');
 const { parseEventTime } = require('../lib/time');
 const { buildEventMessage, buildCreateBoardMessage } = require('../lib/embed');
 
+// Khóa chống spam tạo trùng Event liên tiếp
+const creationLocks = new Set();
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('event')
@@ -28,23 +31,38 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    // 1. Phản hồi lập tức để tránh Timeout 3 giây từ Discord
     try {
-      await interaction.deferReply({ ephemeral: true });
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true });
+      }
     } catch (e) {
       console.error('Không thể deferReply:', e);
     }
 
-    try {
-      const subcommand = interaction.options.getSubcommand();
+    const subcommand = interaction.options.getSubcommand();
 
-      if (subcommand === 'board') {
+    if (subcommand === 'board') {
+      try {
         const msgData = buildCreateBoardMessage();
         await interaction.channel.send(msgData);
         return interaction.editReply({ content: '✅ Đã gửi bảng tạo Event vào kênh!' });
+      } catch (err) {
+        console.error('Lỗi subcommand board:', err);
+        return interaction.editReply({ content: '❌ Không thể gửi bảng tạo Event!' });
+      }
+    }
+
+    if (subcommand === 'create') {
+      const userId = interaction.user.id;
+
+      // Nếu đang trong quá trình xử lý lệnh tạo event của user này -> Bỏ qua lệnh trùng
+      if (creationLocks.has(userId)) {
+        return interaction.editReply({ content: '⚠️ Yêu cầu tạo event của bạn đang được xử lý, vui lòng không bấm liên tục!' });
       }
 
-      if (subcommand === 'create') {
+      creationLocks.add(userId);
+
+      try {
         // Kiểm tra an toàn sự kiện cũ
         try {
           if (typeof db.getLatestEvent === 'function') {
@@ -54,6 +72,7 @@ module.exports = {
               const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
 
               if (attendingCount < 4) {
+                creationLocks.delete(userId);
                 return interaction.editReply({
                   content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} -${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu.`,
                 });
@@ -61,7 +80,7 @@ module.exports = {
             }
           }
         } catch (dbErr) {
-          console.warn('⚠️ Bỏ qua kiểm tra getLatestEvent do lỗi:', dbErr.message);
+          console.warn('⚠️ Bỏ qua kiểm tra getLatestEvent:', dbErr.message);
         }
 
         const title = interaction.options.getString('title');
@@ -74,14 +93,16 @@ module.exports = {
           parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
         } catch (pErr) {
           console.error('Lỗi parseEventTime:', pErr);
+          creationLocks.delete(userId);
           return interaction.editReply({ content: `❌ Lỗi xử lý thời gian: ${pErr.message}` });
         }
 
         if (!parsed.valid) {
+          creationLocks.delete(userId);
           return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
-        // Tạo Event vào DB
+        // Tạo Event trong DB
         const event = db.createEvent({
           guild_id: interaction.guildId,
           channel_id: interaction.channelId,
@@ -106,7 +127,7 @@ module.exports = {
         }
         event.message_id = sent.id;
 
-        // Đăng ký theo dõi tự động dọn dẹp
+        // Đăng ký dọn dẹp tự động
         if (typeof interaction.client.trackEventForExpiration === 'function') {
           interaction.client.trackEventForExpiration(interaction.channel.id, sent.id, eventId, event.start_ts, interaction.guildId);
         }
@@ -115,12 +136,14 @@ module.exports = {
           interaction.client.scheduleEventRoomCreation(interaction.client, event);
         }
 
+        creationLocks.delete(userId);
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
+
+      } catch (err) {
+        creationLocks.delete(userId);
+        console.error('❌ LỖI KHI THỰC THI /event create:', err);
+        return interaction.editReply({ content: `❌ Lỗi hệ thống: \`${err.message}\`` }).catch(() => {});
       }
-    } catch (err) {
-      console.error('❌ LỖI CRITICAL KHI THỰC THI /event:', err);
-      // Hiển thị lỗi chính xác cho bạn biết thay vì bị im lặng báo timeout
-      return interaction.editReply({ content: `❌ Lỗi hệ thống: \`${err.message}\`` }).catch(() => {});
     }
   },
 };

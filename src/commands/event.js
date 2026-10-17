@@ -28,42 +28,49 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    // 1. Phản hồi ngay lập tức để Discord không bị Timeout 3 giây
     await interaction.deferReply({ ephemeral: true });
 
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'board') {
-      const msgData = buildCreateBoardMessage();
-      await interaction.channel.send(msgData);
-      return interaction.editReply({ content: '✅ Đã gửi bảng tạo Event vào kênh!' });
+      try {
+        const msgData = buildCreateBoardMessage();
+        await interaction.channel.send(msgData);
+        return interaction.editReply({ content: '✅ Đã gửi bảng tạo Event vào kênh!' });
+      } catch (err) {
+        console.error('Lỗi subcommand board:', err);
+        return interaction.editReply({ content: '❌ Không thể gửi bảng tạo Event!' });
+      }
     }
 
     if (subcommand === 'create') {
       try {
-        // 1. Kiểm tra điều kiện sự kiện trước đó (Phải có tối thiểu 4 người tham gia)
-        const previousEvent = db.getLatestEvent ? db.getLatestEvent() : null;
-        if (previousEvent) {
-          const previousSignups = db.getSignups(previousEvent.id);
-          const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
+        // Kiểm tra sự kiện gần nhất (nếu có)
+        if (typeof db.getLatestEvent === 'function') {
+          const previousEvent = db.getLatestEvent();
+          if (previousEvent) {
+            const previousSignups = db.getSignups(previousEvent.id) || [];
+            const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
 
-          if (attendingCount < 4) {
-            return interaction.editReply({
-              content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} - ${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu. Cần đảm bảo đủ lực lượng hoặc xử lý sự kiện cũ trước để tránh thiếu người!`,
-            });
+            if (attendingCount < 4) {
+              return interaction.editReply({
+                content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} - ${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu.`,
+              });
+            }
           }
         }
 
         const title = interaction.options.getString('title');
         const timeStr = interaction.options.getString('time');
-        const description = interaction.options.getString('description') || null; // Tùy chọn không bắt buộc
+        const description = interaction.options.getString('description') || null;
 
-        // Tự động truyền 'today' làm ngày mặc định với múi giờ Asia/Ho_Chi_Minh
         const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
         if (!parsed.valid) {
           return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
-        // Tạo bản ghi sự kiện trong Database
+        // Lưu vào Database
         const event = db.createEvent({
           guild_id: interaction.guildId,
           channel_id: interaction.channelId,
@@ -77,30 +84,31 @@ module.exports = {
         });
 
         const eventId = event.id;
-        const signups = db.getSignups(eventId);
-        const msgData = buildEventMessage(event, signups);
+        const signups = db.getSignups(eventId) || [];
 
-        // 2. GỬI TIN NHẮN EMBED CHÍNH VÀO KÊNH (Đã bỏ hoàn toàn phần ping @everyone)
+        // Soạn giao diện tin nhắn - TRUYỀN THÊM interaction.guild ĐỂ TỰ ĐỘNG BẮT EMOJI
+        const msgData = buildEventMessage(event, signups, null, interaction.guild);
+
         const sent = await interaction.channel.send(msgData);
-        db.setEventMessage(eventId, sent.id);
+        if (typeof db.setEventMessage === 'function') {
+          db.setEventMessage(eventId, sent.id);
+        }
         event.message_id = sent.id;
 
-        // 3. HẸN GIỜ TỰ ĐỘNG XÓA TIN NHẮN EMBED CHÍNH SAU 15 PHÚT KỂ TỪ GIỜ HẸN
-        if (typeof interaction.client.scheduleEventExpiration === 'function') {
-          interaction.client.scheduleEventExpiration(interaction.channel, sent.id, eventId, event.start_ts);
+        // Đăng ký theo dõi dọn dẹp
+        if (typeof interaction.client.trackEventForExpiration === 'function') {
+          interaction.client.trackEventForExpiration(interaction.channel.id, sent.id, eventId, event.start_ts, interaction.guildId);
         }
 
-        // 4. HẸN GIỜ TẠO PHÒNG VOICE & GỬI BUILD QUA DM
         if (typeof interaction.client.scheduleEventRoomCreation === 'function') {
           interaction.client.scheduleEventRoomCreation(interaction.client, event);
         }
 
-        // Phản hồi riêng cho người tạo sự kiện
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
 
       } catch (err) {
         console.error('Lỗi khi tạo event:', err);
-        return interaction.editReply({ content: `❌ Lỗi hệ thống: ${err.message}` });
+        return interaction.editReply({ content: `❌ Lỗi hệ thống khi tạo Event: ${err.message}` });
       }
     }
   },

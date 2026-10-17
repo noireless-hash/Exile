@@ -1,7 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { discordTime, googleCalendarLink } = require('./time');
 
-// Bản đồ tra cứu Custom Emoji chuẩn từ server Discord của bạn
+// Bản đồ tra cứu Custom Emoji tĩnh mặc định từ server của bạn
 const WEAPON_EMOJIS = {
   'Dreadstorm Monarch': '<:EldersDreadstormMonarch:1560414109680541797>',
   'Heavy Mace': '<:EldersHeavyMace:1560414517995901138>',
@@ -15,9 +15,44 @@ const WEAPON_EMOJIS = {
   'Rootbound Staff': '<:EldersRootboundStaff:1560415947653648555>'
 };
 
-function buildWeaponSelectMenu(eventId, role) {
+/**
+ * Hàm tự động tìm và lấy Custom Emoji trực tiếp từ Server theo tên
+ * @param {Guild} guild - Đối tượng Guild của Discord
+ * @param {string} emojiName - Tên emoji cần quét
+ * @param {string} fallbackEmoji - Emoji mặc định dự phòng nếu không tìm thấy
+ */
+function getGuildEmoji(guild, emojiName, fallbackEmoji = '') {
+  if (!guild || !guild.emojis) return fallbackEmoji;
+
+  // Chuẩn hóa tên để tìm kiếm linh hoạt (loại bỏ ký tự đặc biệt, viết thường)
+  const cleanName = emojiName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  const customEmoji = guild.emojis.cache.find(e => {
+    const eClean = e.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return eClean === cleanName || eClean.includes(cleanName) || cleanName.includes(eClean);
+  });
+
+  return customEmoji ? customEmoji.toString() : fallbackEmoji;
+}
+
+/**
+ * Hàm hỗ trợ lấy Emoji cho từng vũ khí (Ưu tiên lấy trực tiếp từ Server -> Bảng WEAPON_EMOJIS -> Emoji rỗng)
+ */
+function getWeaponEmoji(guild, weaponName) {
+  if (guild) {
+    const dynamicEmoji = getGuildEmoji(guild, weaponName, null);
+    if (dynamicEmoji) return dynamicEmoji;
+  }
+  return WEAPON_EMOJIS[weaponName] || '';
+}
+
+/**
+ * Tạo Menu Chọn Vũ Khí theo Role
+ */
+function buildWeaponSelectMenu(eventId, role, guild = null) {
+  const roleClean = role ? role.toLowerCase() : 'none';
   const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`weapon_${role ? role.toLowerCase() : 'none'}_${eventId}`);
+    .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   const roleUpper = role ? role.toUpperCase() : null;
 
@@ -25,44 +60,102 @@ function buildWeaponSelectMenu(eventId, role) {
     selectMenu
       .setPlaceholder('🛡️ Chọn Vũ khí Tank của bạn...')
       .addOptions([
-        { label: 'Heavy Mace', value: 'Heavy Mace', description: 'Mở giao tranh tổng lực & câm lặng', emoji: WEAPON_EMOJIS['Heavy Mace'] },
+        { 
+          label: 'Heavy Mace', 
+          value: 'Heavy Mace', 
+          description: 'Mở giao tranh tổng lực & câm lặng', 
+          emoji: getWeaponEmoji(guild, 'Heavy Mace') || '🛡️' 
+        },
       ]);
   } else if (roleUpper === 'DPS') {
     selectMenu
       .setPlaceholder('⚔️ Chọn Vũ khí DPS của bạn...')
       .addOptions([
-        { label: 'Dreadstorm Monarch', value: 'Dreadstorm Monarch', description: 'DPS Bruiser cận chiến ZvZ cực mạnh', emoji: WEAPON_EMOJIS['Dreadstorm Monarch'] },
-        { label: 'Crystal Reaper', value: 'Crystal Reaper', description: 'Sát thương diện rộng chí mạng', emoji: WEAPON_EMOJIS['Crystal Reaper'] },
-        { label: 'Lightcaller', value: 'Lightcaller', description: 'Cấu rỉa tầm xa', emoji: WEAPON_EMOJIS['Lightcaller'] },
-        { label: 'Hellspawn Staff', value: 'Hellspawn Staff', description: 'Sát thương lửa cực mạnh', emoji: WEAPON_EMOJIS['Hellspawn Staff'] },
-        { label: 'Permafrost Prism', value: 'Permafrost Prism', description: 'Đóng băng & dồn sát thương', emoji: WEAPON_EMOJIS['Permafrost Prism'] },
-        { label: 'Astral Staff', value: 'Astral Staff', description: 'Sát thương phép thuật diện rộng', emoji: WEAPON_EMOJIS['Astral Staff'] },
+        { 
+          label: 'Dreadstorm Monarch', 
+          value: 'Dreadstorm Monarch', 
+          description: 'DPS Bruiser cận chiến ZvZ cực mạnh', 
+          emoji: getWeaponEmoji(guild, 'Dreadstorm Monarch') || '⚔️' 
+        },
+        { 
+          label: 'Crystal Reaper', 
+          value: 'Crystal Reaper', 
+          description: 'Sát thương diện rộng chí mạng', 
+          emoji: getWeaponEmoji(guild, 'Crystal Reaper') || '⚔️' 
+        },
+        { 
+          label: 'Lightcaller', 
+          value: 'Lightcaller', 
+          description: 'Cấu rỉa tầm xa', 
+          emoji: getWeaponEmoji(guild, 'Lightcaller') || '⚔️' 
+        },
+        { 
+          label: 'Hellspawn Staff', 
+          value: 'Hellspawn Staff', 
+          description: 'Sát thương lửa cực mạnh', 
+          emoji: getWeaponEmoji(guild, 'Hellspawn Staff') || '⚔️' 
+        },
+        { 
+          label: 'Permafrost Prism', 
+          value: 'Permafrost Prism', 
+          description: 'Đóng băng & dồn sát thương', 
+          emoji: getWeaponEmoji(guild, 'Permafrost Prism') || '⚔️' 
+        },
+        { 
+          label: 'Astral Staff', 
+          value: 'Astral Staff', 
+          description: 'Sát thương phép thuật diện rộng', 
+          emoji: getWeaponEmoji(guild, 'Astral Staff') || '⚔️' 
+        },
       ]);
   } else if (roleUpper === 'HEALER') {
     selectMenu
       .setPlaceholder('🌿 Chọn Vũ khí Healer của bạn...')
       .addOptions([
-        { label: 'Hallowfall', value: 'Hallowfall', description: 'Hồi máu nhóm cơ động cao', emoji: WEAPON_EMOJIS['Hallowfall'] },
-        { label: 'Blight Staff', value: 'Blight Staff', description: 'Hồi máu theo thời gian (HoT)', emoji: WEAPON_EMOJIS['Blight Staff'] },
+        { 
+          label: 'Hallowfall', 
+          value: 'Hallowfall', 
+          description: 'Hồi máu nhóm cơ động cao', 
+          emoji: getWeaponEmoji(guild, 'Hallowfall') || '🌿' 
+        },
+        { 
+          label: 'Blight Staff', 
+          value: 'Blight Staff', 
+          description: 'Hồi máu theo thời gian (HoT)', 
+          emoji: getWeaponEmoji(guild, 'Blight Staff') || '🌿' 
+        },
       ]);
   } else if (roleUpper === 'SUPPORT') {
     selectMenu
       .setPlaceholder('⚡ Chọn Vũ khí Support của bạn...')
       .addOptions([
-        { label: 'Rootbound Staff', value: 'Rootbound Staff', description: 'Khống chế diện rộng', emoji: WEAPON_EMOJIS['Rootbound Staff'] },
+        { 
+          label: 'Rootbound Staff', 
+          value: 'Rootbound Staff', 
+          description: 'Khống chế diện rộng', 
+          emoji: getWeaponEmoji(guild, 'Rootbound Staff') || '⚡' 
+        },
       ]);
   } else {
     selectMenu
       .setPlaceholder('🎯 Chọn Role bên trên trước để hiện danh sách Vũ khí...')
       .addOptions([
-        { label: 'Hướng dẫn', value: 'guide', description: 'Vui lòng bấm nút Tank, DPS, Healer hoặc Support ở trên', emoji: 'ℹ️' }
+        { 
+          label: 'Hướng dẫn', 
+          value: 'guide', 
+          description: 'Vui lòng bấm nút Tank, DPS, Healer hoặc Support ở trên', 
+          emoji: 'ℹ️' 
+        }
       ]);
   }
 
   return new ActionRowBuilder().addComponents(selectMenu);
 }
 
-function buildEventMessage(event, signups = [], currentRole = null) {
+/**
+ * Soạn Bảng Thông Báo Event Embed
+ */
+function buildEventMessage(event, signups = [], currentRole = null, guild = null) {
   const uppercaseTitle = (event.title || '').toUpperCase();
   const bigTitle = `# ⚔️ ${uppercaseTitle} ⚔️`;
   const descText = event.description ? `\n*${event.description}*` : '';
@@ -74,19 +167,26 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
 
+  // Tự động quét Emoji Role trực tiếp từ Server nếu có
+  const tankIcon = getGuildEmoji(guild, 'tank', '🛡️');
+  const dpsIcon = getGuildEmoji(guild, 'dps', '⚔️');
+  const healerIcon = getGuildEmoji(guild, 'healer', '🌿');
+  const supportIcon = getGuildEmoji(guild, 'support', '⚡');
+
   const roles = [
-    { name: '🛡️ Tank', key: 'TANK' },
-    { name: '⚔️ DPS', key: 'DPS' },
-    { name: '🌿 Healer', key: 'HEALER' },
-    { name: '⚡ Support', key: 'SUPPORT' },
+    { name: `${tankIcon} Tank`, key: 'TANK' },
+    { name: `${dpsIcon} DPS`, key: 'DPS' },
+    { name: `${healerIcon} Healer`, key: 'HEALER' },
+    { name: `${supportIcon} Support`, key: 'SUPPORT' },
   ];
 
   for (const r of roles) {
     const list = signups.filter(s => s.role === r.key && s.status === 'attending');
     const valueStr = list.length > 0 
       ? list.map(s => {
-          const weaponEmoji = s.job && WEAPON_EMOJIS[s.job] ? `${WEAPON_EMOJIS[s.job]} ` : '';
-          return `• **${s.username}** ${s.job ? `(${weaponEmoji}${s.job})` : ''}`;
+          const weaponEmoji = s.job ? getWeaponEmoji(guild, s.job) : '';
+          const emojiPrefix = weaponEmoji ? `${weaponEmoji} ` : '';
+          return `• **${s.username}** ${s.job ? `(${emojiPrefix}${s.job})` : ''}`;
         }).join('\n')
       : '_Trống_';
     
@@ -106,20 +206,26 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
+  // Nút bấm phân vị trí Role
   const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
-    new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
-    new ButtonBuilder().setCustomId(`healer_${event.id}`).setLabel('Healer').setStyle(ButtonStyle.Primary).setEmoji('🌿'),
-    new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
+    new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji(tankIcon),
+    new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji(dpsIcon),
+    new ButtonBuilder().setCustomId(`healer_${event.id}`).setLabel('Healer').setStyle(ButtonStyle.Primary).setEmoji(healerIcon),
+    new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji(supportIcon),
   );
+
+  // Nút bấm trạng thái tham gia
+  const tentativeIcon = getGuildEmoji(guild, 'tentative', '❓');
+  const absenceIcon = getGuildEmoji(guild, 'absence', '❌');
+  const withdrawIcon = getGuildEmoji(guild, 'withdraw', '🚪');
 
   const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
-    new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji('❌'),
-    new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
+    new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji(tentativeIcon),
+    new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji(absenceIcon),
+    new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji(withdrawIcon),
   );
 
-  const row3 = buildWeaponSelectMenu(event.id, currentRole);
+  const row3 = buildWeaponSelectMenu(event.id, currentRole, guild);
 
   return {
     embeds: [embed],
@@ -127,6 +233,9 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   };
 }
 
+/**
+ * Bảng Đăng Ký Cố Định Tạo Event
+ */
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0xAA8833)
@@ -148,4 +257,5 @@ module.exports = {
   buildEventMessage,
   buildCreateBoardMessage,
   buildWeaponSelectMenu,
+  getGuildEmoji,
 };

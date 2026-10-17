@@ -2,14 +2,13 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 
 /**
- * Danh mục Vũ khí chính thức kèm Custom Emoji ID từ Server Discord
+ * Bảng vũ khí & ID Custom Emoji chính thức phân theo Role
  */
 const WEAPONS_BY_ROLE = {
   TANK: [
     { label: 'Bedrock Mace', description: 'Bedrock Mace', emoji: '<:BedrockMace:1560804439030239233>' },
     { label: 'Dreadstorm Monarch', description: 'Dreadstorm Monarch', emoji: '<:DreadstormMonarch:1560804258985550005>' },
     { label: 'Earthrune Staff', description: 'Earthrune Staff', emoji: '<:EarthruneStaff:1560782564321665054>' },
-    { label: 'Forcepulse Bracers', description: 'Forcepulse Bracers', emoji: '<:ForcepulseBracers:1560784181649346580>' },
     { label: 'Forge Hammers', description: 'Forge Hammers', emoji: '<:ForgeHammers:1560804214610067456>' },
     { label: 'Great Arcane Staff', description: 'Great Arcane Staff', emoji: '<:GreatArcaneStaff:1560782040457027705>' },
     { label: 'Hand of Justice', description: 'Hand of Justice', emoji: '<:HandofJustice:1560804317026451517>' },
@@ -45,6 +44,7 @@ const WEAPONS_BY_ROLE = {
     { label: 'Dawnsong', description: 'Dawnsong', emoji: '<:Dawnsong:1560781806742016020>' },
     { label: 'Daybreaker', description: 'Daybreaker', emoji: '<:Daybreaker:1560782408188694669>' },
     { label: 'Fists of Avalon', description: 'Fists of Avalon', emoji: '<:FistsofAvalon:1560784156034732132>' },
+    { label: 'Forcepulse Bracers', description: 'Forcepulse Bracers', emoji: '<:ForcepulseBracers:1560784181649346580>' },
     { label: 'Halberd', description: 'Halberd', emoji: '<:Halberd:1560804499197657209>' },
     { label: 'Hellspawn Staff', description: 'Hellspawn Staff', emoji: '<:HellspawnStaff:1560782540573384794>' },
     { label: 'Heron Spear', description: 'Heron Spear', emoji: '<:HeronSpear:1560782343449608202>' },
@@ -63,9 +63,6 @@ const WEAPONS_BY_ROLE = {
   ]
 };
 
-/**
- * Tạo Menu Chọn Vũ Khí (Select Menu) phân loại theo Role
- */
 function buildWeaponSelectMenu(eventId, role) {
   const roleUpper = role ? role.toUpperCase() : null;
   const roleClean = roleUpper ? roleUpper.toLowerCase() : 'none';
@@ -74,7 +71,7 @@ function buildWeaponSelectMenu(eventId, role) {
     .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   if (roleUpper && WEAPONS_BY_ROLE[roleUpper]) {
-    // Giới hạn tối đa 25 items theo chuẩn Discord Select Menu
+    // Discord chỉ hỗ trợ tối đa 25 options cho mỗi Select Menu
     const weaponsList = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
 
     selectMenu
@@ -101,9 +98,6 @@ function buildWeaponSelectMenu(eventId, role) {
   return new ActionRowBuilder().addComponents(selectMenu);
 }
 
-/**
- * Tạo Bảng Thông Báo Sự Kiện (Embed + Buttons + Select Menu)
- */
 function buildEventMessage(event, signups = [], currentRole = null) {
   const uppercaseTitle = (event.title || '').toUpperCase();
   const bigTitle = `# ⚔️ ${uppercaseTitle} ⚔️`;
@@ -129,7 +123,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
       ? list.map(s => {
           let weaponEmojiStr = '';
           if (s.job) {
-            // Quét toàn bộ kho vũ khí để lấy Emoji chính xác
             let foundWeapon = null;
             for (const roleKey in WEAPONS_BY_ROLE) {
               const match = WEAPONS_BY_ROLE[roleKey].find(w => w.label.toLowerCase() === s.job.toLowerCase());
@@ -160,7 +153,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  // Hàng 1: Các nút chọn Role
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
     new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
@@ -168,14 +160,12 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
   );
 
-  // Hàng 2: Các nút chọn trạng thái tham gia
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
     new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji('❌'),
     new ButtonBuilder().setCustomId(`withdraw_${event.id}`).setLabel('Withdraw').setStyle(ButtonStyle.Danger).setEmoji('🚪'),
   );
 
-  // Hàng 3: Select Menu chọn vũ khí theo Role
   const row3 = buildWeaponSelectMenu(event.id, currentRole);
 
   return {

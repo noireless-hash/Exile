@@ -4,8 +4,11 @@ const eventCommand = require('./commands/event');
 const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
 
-process.on('unhandledRejection', error => console.error('Lỗi Promise:', error));
-process.on('uncaughtException', error => console.error('Lỗi Exception:', error));
+// ==========================================
+// 0. BẮT LỖI TOÀN CỤC CHỐNG SẬP BOT (CRASH)
+// ==========================================
+process.on('unhandledRejection', error => console.error('Lỗi Promise chưa được bắt:', error));
+process.on('uncaughtException', error => console.error('Lỗi Exception chưa được bắt:', error));
 
 const client = new Client({
   intents: [
@@ -26,18 +29,24 @@ const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
 const activeEventsTracker = new Map();
 
+/**
+ * 1. ĐĂNG KÝ THEO DÕI TỰ ĐỘNG XÓA BÀI ĐĂNG SỰ KIỆN SAU 15 PHÚT
+ */
 function trackEventForExpiration(channelId, messageId, eventId, startTimestamp, guildId) {
   const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
   activeEventsTracker.set(eventId, {
     channelId,
     messageId,
-    expirationTime: millis + (15 * 60 * 1000), // Xóa sau 15 phút
+    expirationTime: millis + (15 * 60 * 1000), // Giờ hẹn + 15 phút
     guildId,
   });
 }
 
 client.trackEventForExpiration = trackEventForExpiration;
 
+/**
+ * 2. TỰ ĐỘNG TẠO PHÒNG VOICE KHI ĐẾN GIỜ HẸN
+ */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
   const millis = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
@@ -52,17 +61,26 @@ function scheduleEventRoomCreation(client, event) {
 
       const signups = db.getSignups(event.id);
       const attendingMembers = signups.filter(s => s.status === 'attending');
-      if (attendingMembers.length === 0) return;
 
+      if (attendingMembers.length === 0) {
+        console.log(`⚠️ Sự kiện #${event.id} (${event.title}) đến giờ nhưng không có ai đăng ký.`);
+        return;
+      }
+
+      // Cấu hình quyền riêng tư cho Voice Channel
       const permissionOverwrites = [
         { id: guild.roles.everyone.id, deny: ['ViewChannel', 'Connect'] },
         { id: client.user.id, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'] }
       ];
 
-      for (const m of attendingMembers) {
-        permissionOverwrites.push({ id: m.user_id, allow: ['ViewChannel', 'Connect', 'Speak'] });
+      for (const memberSignup of attendingMembers) {
+        permissionOverwrites.push({
+          id: memberSignup.user_id,
+          allow: ['ViewChannel', 'Connect', 'Speak'],
+        });
       }
 
+      // Tạo Voice Channel
       const roomName = `⚔️│${event.title}`.toLowerCase().replace(/\s+/g, '-');
       const createdChannel = await guild.channels.create({
         name: roomName,
@@ -71,17 +89,21 @@ function scheduleEventRoomCreation(client, event) {
       });
 
       managedEventRooms.add(createdChannel.id);
+      console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
+      // Thông báo trong phòng Voice
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
           `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-          `Mời các chiến hữu nhanh chóng ổn định vị trí:\n${mentions}`
+          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}`
         );
-      } catch (err) {}
+      } catch (err) {
+        console.error('Không thể gửi thông báo trong voice channel.');
+      }
 
     } catch (error) {
-      console.error(`Lỗi tạo room voice #${event.id}:`, error);
+      console.error(`Lỗi khi xử lý giờ hẹn cho sự kiện #${event.id}:`, error);
     }
   }, Math.max(0, delay));
 }
@@ -89,7 +111,7 @@ function scheduleEventRoomCreation(client, event) {
 client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 
 client.once('ready', async () => {
-  console.log(`🤖 Bot đã sẵn sàng: ${client.user.tag}`);
+  console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
 
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
@@ -99,9 +121,11 @@ client.once('ready', async () => {
         scheduleEventRoomCreation(client, event);
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    console.error('Lỗi khi nạp sự kiện:', err);
+  }
 
-  // Tự động xóa bài đăng quá 15 phút
+  // Quét mỗi 10 giây để xóa bài đăng sự kiện hết hạn (sau 15 phút)
   setInterval(async () => {
     const now = Date.now();
     for (const [eventId, data] of activeEventsTracker.entries()) {
@@ -110,16 +134,23 @@ client.once('ready', async () => {
           const channel = await client.channels.fetch(data.channelId).catch(() => null);
           if (channel) {
             const message = await channel.messages.fetch(data.messageId).catch(() => null);
-            if (message) await message.delete().catch(() => {});
+            if (message) {
+              await message.delete().catch(() => {});
+              console.log(`🗑️ Đã tự động xóa bài đăng sự kiện #${eventId} sau 15 phút.`);
+            }
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error(`Không thể xóa tin nhắn sự kiện #${eventId}:`, err);
+        }
         activeEventsTracker.delete(eventId);
       }
     }
   }, 10 * 1000);
 });
 
-// Xóa phòng trống sau 10 giây
+/**
+ * 3. TỰ ĐỘNG DỌN DẸP PHÒNG TRỐNG SAU 10 GIÂY
+ */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
     const oldChannelId = oldState.channelId;
@@ -142,8 +173,11 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
               if (currentChannel && currentChannel.members.size === 0) {
                 await currentChannel.delete();
                 managedEventRooms.delete(oldChannelId);
+                console.log(`🧹 Đã dọn dẹp phòng thoại trống: ${currentChannel.name}`);
               }
-            } catch (err) {}
+            } catch (err) {
+              console.error('Lỗi khi xóa phòng trống:', err);
+            }
             emptyRoomTimeouts.delete(oldChannelId);
           }, 10 * 1000);
 
@@ -151,9 +185,14 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
       }
     }
-  } catch (error) {}
+  } catch (error) {
+    console.error('Lỗi xử lý voiceStateUpdate:', error);
+  }
 });
 
+/**
+ * 4. XỬ LÝ TƯƠNG TÁC NÚT BẤM & MENU CHỌN VŨ KHÍ
+ */
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -184,14 +223,22 @@ client.on('interactionCreate', async (interaction) => {
 
       if (['tank', 'dps', 'healer', 'support'].includes(action)) {
         const roleName = action.toUpperCase();
-        db.upsertSignup(eventId, userId, username, { role: roleName, status: 'attending' });
+        
+        // KIỂM TRA ROLE CŨ: Nếu chuyển sang Role khác thì reset vũ khí (job = null)
+        const currentSignup = db.getSignup(eventId, userId);
+        if (currentSignup && currentSignup.role !== roleName) {
+          db.upsertSignup(eventId, userId, username, { role: roleName, job: null, status: 'attending' });
+        } else {
+          db.upsertSignup(eventId, userId, username, { role: roleName, status: 'attending' });
+        }
+        
         activeRoleForMenu = roleName; 
       } else if (action === 'withdraw') {
         db.removeSignup(eventId, userId);
       } else if (action === 'tentative') {
-        db.upsertSignup(eventId, userId, username, { status: 'tentative' });
+        db.upsertSignup(eventId, userId, username, { status: 'tentative', job: null });
       } else if (action === 'absence') {
-        db.upsertSignup(eventId, userId, username, { status: 'absence' });
+        db.upsertSignup(eventId, userId, username, { status: 'absence', job: null });
       } else if (action === 'weapon') {
         const roleType = parts[1] ? parts[1].toUpperCase() : null;
         const selectedWeapon = interaction.values[0];
@@ -213,7 +260,7 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   } catch (error) {
-    console.error('Lỗi tương tác:', error);
+    console.error('Lỗi khi xử lý tương tác:', error);
   }
 });
 

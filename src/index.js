@@ -33,9 +33,13 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
+// Cấu hình ID kênh lưu trữ build chuẩn
+const MODERATOR_CHANNEL_ID = '1352408303371812868';
+
 const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
 const activeEventsTracker = new Map();
+const sentBuildUsers = new Set(); // Chống spam DM cho mỗi event
 
 /**
  * 1. ĐĂNG KÝ THEO DÕI SỰ KIỆN ĐỂ TỰ ĐỘNG XÓA SAU 15 PHÚT KỂ TỪ GIỜ HẸN
@@ -55,7 +59,7 @@ function trackEventForExpiration(channelId, messageId, eventId, startTimestamp, 
 client.trackEventForExpiration = trackEventForExpiration;
 
 /**
- * 2. Tự động tạo phòng thoại khi đến giờ hẹn (Đã bỏ hoàn toàn tính năng gửi build qua DM)
+ * 2. Tự động tạo phòng thoại & Quét kho lấy đúng ID Build gửi DM cho từng người
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
@@ -69,6 +73,7 @@ function scheduleEventRoomCreation(client, event) {
   const executionDelay = Math.max(0, delay);
 
   setTimeout(async () => {
+    let createdChannelId = null;
     try {
       const guild = await client.guilds.fetch(event.guild_id).catch(() => null);
       if (!guild) return;
@@ -108,6 +113,7 @@ function scheduleEventRoomCreation(client, event) {
         permissionOverwrites: permissionOverwrites,
       });
 
+      createdChannelId = createdChannel.id;
       managedEventRooms.add(createdChannel.id);
       console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
@@ -116,10 +122,87 @@ function scheduleEventRoomCreation(client, event) {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
           `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}`
+          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}\n` +
+          `*(Hệ thống đã tự động gửi Build chuẩn riêng qua tin nhắn trực tiếp - DM cho từng người)*`
         );
       } catch (err) {
         console.error('Không thể gửi thông báo trong voice channel.');
+      }
+
+      // --- KHÔI PHỤC LOGIC QUÉT KÊNH MODERATOR TÌM BÀI THEO ID VÀ GỬI DM ---
+      const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
+      let modMessages = [];
+      if (modChannel) {
+        const fetched = await modChannel.messages.fetch({ limit: 100 }).catch(() => null);
+        if (fetched) modMessages = Array.from(fetched.values());
+      }
+
+      for (const memberSignup of attendingMembers) {
+        try {
+          const userKey = `${event.id}_${memberSignup.user_id}`;
+          if (sentBuildUsers.has(userKey)) continue;
+
+          const member = await guild.members.fetch(memberSignup.user_id).catch(() => null);
+          if (!member) continue;
+
+          const userRole = (memberSignup.role || '').trim().toLowerCase();
+          const userWeapon = (memberSignup.job || '').trim().toLowerCase();
+
+          let bestMatchUrl = null;
+
+          // THUẬT TOÁN KHỚP CHÍNH XÁC THEO ID / TÊN VŨ KHÍ
+          for (const msg of modMessages) {
+            const content = (msg.content || '').toLowerCase();
+            const embedDesc = msg.embeds.length > 0 ? (msg.embeds[0].description || '').toLowerCase() : '';
+            const embedTitle = msg.embeds.length > 0 ? (msg.embeds[0].title || '').toLowerCase() : '';
+            const fullText = `${content} \n ${embedDesc} \n ${embedTitle}`;
+
+            const hasImage = msg.attachments.size > 0 || (msg.embeds.length > 0 && msg.embeds[0].image);
+            if (!hasImage) continue;
+
+            // Kiểm tra xem bài viết trong kênh Moderator có chứa ID hoặc Tên Vũ Khí người dùng chọn không
+            if (userWeapon && fullText.includes(userWeapon)) {
+              if (msg.attachments.size > 0) {
+                bestMatchUrl = msg.attachments.first().url;
+              } else if (msg.embeds.length > 0 && msg.embeds[0].image) {
+                bestMatchUrl = msg.embeds[0].image.url;
+              }
+              break; // Tìm thấy đúng bài ID match 100% thì dừng ngay
+            }
+          }
+
+          // Dự phòng nếu không khớp ID cụ thể: Lấy ảnh khớp với Role (Tank, Healer, DPS, Support)
+          if (!bestMatchUrl && userRole) {
+            for (const msg of modMessages) {
+              const fullText = `${msg.content || ''} ${msg.embeds[0]?.description || ''}`.toLowerCase();
+              const hasImage = msg.attachments.size > 0 || (msg.embeds.length > 0 && msg.embeds[0].image);
+              if (hasImage && fullText.includes(userRole)) {
+                bestMatchUrl = msg.attachments.size > 0 ? msg.attachments.first().url : msg.embeds[0].image.url;
+                break;
+              }
+            }
+          }
+
+          // Soạn nội dung DM
+          const channelMention = createdChannelId ? `<#${createdChannelId}>` : 'Phòng thoại sự kiện';
+          const dmPayload = {
+            content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
+                     `Role của bạn: **${memberSignup.role || 'Chưa rõ'}** | Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
+                     `Phòng thoại riêng đã sẵn sàng: ${channelMention}\n` +
+                     `Dưới đây là **Build chuẩn** dành riêng cho nhiệm vụ của bạn:`
+          };
+
+          if (bestMatchUrl) {
+            dmPayload.files = [bestMatchUrl];
+          }
+
+          await member.send(dmPayload);
+          sentBuildUsers.add(userKey);
+
+          await new Promise(resolve => setTimeout(resolve, 500)); // Tránh bị rate limit Discord
+        } catch (err) {
+          console.error(`Không thể gửi DM cho user ${memberSignup.user_id} (Có thể họ khóa DM).`);
+        }
       }
 
     } catch (error) {
@@ -145,7 +228,7 @@ client.once('ready', async () => {
     console.error('Lỗi khi nạp sự kiện:', err);
   }
 
-  // BỘ QUÉT THỜI GIAN THỰC CHẠY MỖI 10 GIÂY ĐỂ XÓA SỰ KIỆN QUÁ HẠN
+  // BỘ QUÉT THỜI GIAN THỰC CHẠY MỖI 10 GIÂY ĐỂ XÓA SỰ KIỆN QUÁ HẠN 15 PHÚT
   setInterval(async () => {
     const now = Date.now();
     for (const [eventId, data] of activeEventsTracker.entries()) {
@@ -248,35 +331,4 @@ client.on('interactionCreate', async (interaction) => {
         db.upsertSignup(eventId, userId, username, { status: 'tentative' });
       } else if (action === 'absence') {
         db.upsertSignup(eventId, userId, username, { status: 'absence' });
-      } else if (action === 'weapon') {
-        const roleType = parts[1] ? parts[1].toUpperCase() : null;
-        const selectedWeapon = interaction.values[0];
-        
-        db.upsertSignup(eventId, userId, username, { job: selectedWeapon });
-        activeRoleForMenu = roleType;
-      }
-
-      const signups = db.getSignups(eventId);
-      const userSignup = db.getSignup(eventId, userId);
-      if (userSignup && userSignup.role) {
-        activeRoleForMenu = userSignup.role;
-      }
-
-      const msgData = buildEventMessage(event, signups, activeRoleForMenu);
-
-      if (interaction.message) {
-        await interaction.message.edit(msgData);
-      }
-    }
-  } catch (error) {
-    console.error('Lỗi khi xử lý tương tác:', error);
-    const content = '❌ Có lỗi xảy ra khi thực hiện tương tác này!';
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content, ephemeral: true }).catch(() => {});
-    } else {
-      await interaction.reply({ content, ephemeral: true }).catch(() => {});
-    }
-  }
-});
-
-client.login(config.token);
+      } else if (action === 'weapon

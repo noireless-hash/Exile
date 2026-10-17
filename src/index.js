@@ -5,9 +5,13 @@ const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
 const BUILDS_DATA = require('./data/builds');
 
+// ID Kênh Moderator chứa các bài đăng Build chuẩn
 const MODERATOR_CHANNEL_ID = '1352408303371812868';
 const sentBuildUsers = new Set();
 
+// ==========================================
+// 0. BẮT LỖI TOÀN CỤC CHỐNG SẬP BOT
+// ==========================================
 process.on('unhandledRejection', error => console.error('Lỗi Promise chưa được bắt:', error));
 process.on('uncaughtException', error => console.error('Lỗi Exception chưa được bắt:', error));
 
@@ -30,33 +34,38 @@ const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
 
 /**
- * 1. QUÉT HỆ THỐNG XÓA BÀI ĐĂNG HẾT HẠN (GIỜ HẸN + 15 PHÚT)
+ * 1. QUÉT HỆ THỐNG XÓA BÀI ĐĂNG SỰ KIỆN HẾT HẠN (GIỜ HẸN + 15 PHÚT)
  */
 async function cleanupExpiredEvents() {
   try {
-    const allEvents = db.getAllEvents ? db.getAllEvents() : [];
+    if (typeof db.getAllEvents !== 'function') return;
+
+    const allEvents = db.getAllEvents() || [];
     const nowMs = Date.now();
 
     for (const event of allEvents) {
       if (!event.channel_id || !event.message_id || !event.start_ts) continue;
 
-      const startMs = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
-      const expireMs = startMs + (15 * 60 * 1000);
+      // Chuẩn hóa Unix timestamp (giây) sang miligiây
+      const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
+      const expireMs = startMs + (15 * 60 * 1000); // Giờ hẹn + 15 phút
 
+      // Đã quá thời hạn 15 phút
       if (nowMs >= expireMs) {
         try {
           const channel = await client.channels.fetch(event.channel_id).catch(() => null);
           if (channel) {
             const message = await channel.messages.fetch(event.message_id).catch(() => null);
             if (message) {
-              await message.delete().catch(() => {});
-              console.log(`🗑️ [Xóa tự động] Đã xóa bài đăng Event #${event.id} (${event.title}) sau 15 phút.`);
+              await message.delete().catch(err => console.error(`Lỗi xóa tin nhắn Event #${event.id}:`, err.message));
+              console.log(`🗑️ [Xóa tự động] Đã xóa bài đăng Event #${event.id} (${event.title})`);
             }
           }
-        } catch (err) {
-          console.error(`Không thể xóa tin nhắn Event #${event.id}:`, err.message);
+        } catch (fetchErr) {
+          console.error(`Không thể xóa bài đăng Event #${event.id}:`, fetchErr.message);
         }
 
+        // Xóa Event khỏi SQLite CSDL để không quét lại lần sau
         if (typeof db.deleteEvent === 'function') {
           db.deleteEvent(event.id);
         }
@@ -72,9 +81,10 @@ async function cleanupExpiredEvents() {
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
-  const startMs = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
+  const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
   const delay = startMs - now;
 
+  // Nếu sự kiện đã quá 15 phút thì bỏ qua không tạo voice
   if (delay < -15 * 60 * 1000) return;
 
   setTimeout(async () => {
@@ -86,10 +96,11 @@ function scheduleEventRoomCreation(client, event) {
       const attendingMembers = signups.filter(s => s.status === 'attending');
 
       if (attendingMembers.length === 0) {
-        console.log(`⚠️ Sự kiện #${event.id} (${event.title}) đến giờ nhưng không có ai đăng ký.`);
+        console.log(`⚠️ Sự kiện #${event.id} (${event.title}) đến giờ nhưng không có ai tham gia.`);
         return;
       }
 
+      // Phân quyền cho phòng thoại riêng
       const permissionOverwrites = [
         { id: guild.roles.everyone.id, deny: ['ViewChannel', 'Connect'] },
         { id: client.user.id, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'] }
@@ -112,18 +123,19 @@ function scheduleEventRoomCreation(client, event) {
       managedEventRooms.add(createdChannel.id);
       console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
+      // Nhắc nhở người tham gia trong voice
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
           `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-          `Mời các chiến hữu nhanh chóng ổn định vị trí:\n${mentions}\n` +
+          `Mời các chiến hữu nhanh chóng tập trung:\n${mentions}\n` +
           `*(Ảnh Build chuẩn đã được tự động gửi qua DM cho từng người)*`
         );
       } catch (err) {}
 
       const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
 
-      // Gửi DM Build cho từng người
+      // Gửi DM Build riêng cho từng người tham gia
       for (const memberSignup of attendingMembers) {
         try {
           const userKey = `${event.id}_${memberSignup.user_id}`;
@@ -135,7 +147,7 @@ function scheduleEventRoomCreation(client, event) {
           const userWeapon = memberSignup.job;
           let attachments = [];
 
-          // Tìm Message ID chính xác của Build trong Mod Channel
+          // Tìm Message ID chính xác của Build từ data/builds.js
           if (userWeapon && BUILDS_DATA[userWeapon] && modChannel) {
             const targetMessageId = BUILDS_DATA[userWeapon].messageId;
             const buildMessage = await modChannel.messages.fetch(targetMessageId).catch(() => null);
@@ -160,6 +172,7 @@ function scheduleEventRoomCreation(client, event) {
           await member.send(dmPayload);
           sentBuildUsers.add(userKey);
 
+          // Tạm dừng 0.5s để tránh dính Rate Limit DM từ Discord
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (err) {
           console.error(`Không thể gửi DM cho user ${memberSignup.user_id}:`, err.message);
@@ -186,13 +199,17 @@ client.once('ready', async () => {
       }
     }
   } catch (err) {
-    console.error('Lỗi khi nạp sự kiện:', err);
+    console.error('Lỗi khi nạp danh sách sự kiện:', err);
   }
 
+  // Quét dọn dẹp ngay khi bật bot và mỗi 10 giây
   cleanupExpiredEvents();
   setInterval(cleanupExpiredEvents, 10 * 1000);
 });
 
+/**
+ * 3. TỰ ĐỘNG XÓA PHÒNG VOICE TRỐNG SAU 10 GIÂY
+ */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
     const oldChannelId = oldState.channelId;
@@ -228,6 +245,9 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   } catch (error) {}
 });
 
+/**
+ * 4. XỬ LÝ TƯƠNG TÁC NÚT BẤM & MENU CHỌN VŨ KHÍ
+ */
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -259,6 +279,7 @@ client.on('interactionCreate', async (interaction) => {
       if (['tank', 'dps', 'healer', 'support'].includes(action)) {
         const roleName = action.toUpperCase();
         
+        // NẾU ĐỔI ROLE: Reset lại vũ khí (job = null) để không bị dính vũ khí cũ
         const currentSignup = db.getSignup(eventId, userId);
         if (currentSignup && currentSignup.role !== roleName) {
           db.upsertSignup(eventId, userId, username, { role: roleName, job: null, status: 'attending' });

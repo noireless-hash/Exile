@@ -28,8 +28,14 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    // 1. Phản hồi ngay lập tức để Discord không bị Timeout 3 giây
-    await interaction.deferReply({ ephemeral: true });
+    // 1. Phản hồi ngay lập tức để tránh lỗi Timeout 3 giây của Discord
+    try {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true });
+      }
+    } catch (err) {
+      console.error('Lỗi deferReply:', err);
+    }
 
     const subcommand = interaction.options.getSubcommand();
 
@@ -86,7 +92,7 @@ module.exports = {
         const eventId = event.id;
         const signups = db.getSignups(eventId) || [];
 
-        // Soạn giao diện tin nhắn - TRUYỀN THÊM interaction.guild ĐỂ TỰ ĐỘNG BẮT EMOJI
+        // Soạn giao diện tin nhắn - Truyền thêm interaction.guild để tự động bắt Emoji
         const msgData = buildEventMessage(event, signups, null, interaction.guild);
 
         const sent = await interaction.channel.send(msgData);
@@ -95,7 +101,7 @@ module.exports = {
         }
         event.message_id = sent.id;
 
-        // Đăng ký theo dõi dọn dẹp
+        // Đăng ký theo dõi dọn dẹp tự động
         if (typeof interaction.client.trackEventForExpiration === 'function') {
           interaction.client.trackEventForExpiration(interaction.channel.id, sent.id, eventId, event.start_ts, interaction.guildId);
         }
@@ -108,7 +114,7 @@ module.exports = {
 
       } catch (err) {
         console.error('Lỗi khi tạo event:', err);
-        return interaction.editReply({ content: `❌ Lỗi hệ thống khi tạo Event: ${err.message}` });
+        return interaction.editReply({ content: `❌ Lỗi hệ thống khi tạo Event: ${err.message}` }).catch(() => {});
       }
     }
   },

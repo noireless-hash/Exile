@@ -2,7 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 
 /**
- * Danh mục Vũ khí chính thức theo dữ liệu ID & Role từ server Discord của bạn
+ * Bảng vũ khí & ID Custom Emoji chính thức phân theo Role
  */
 const WEAPONS_BY_ROLE = {
   TANK: [
@@ -63,9 +63,6 @@ const WEAPONS_BY_ROLE = {
   ]
 };
 
-/**
- * 1. Tạo Menu Chọn Vũ Khí (Select Menu) phân loại theo Role
- */
 function buildWeaponSelectMenu(eventId, role) {
   const roleUpper = role ? role.toUpperCase() : null;
   const roleClean = roleUpper ? roleUpper.toLowerCase() : 'none';
@@ -74,12 +71,10 @@ function buildWeaponSelectMenu(eventId, role) {
     .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   if (roleUpper && WEAPONS_BY_ROLE[roleUpper]) {
-    // Discord giới hạn tối đa 25 tùy chọn trong 1 StringSelectMenu
-    const weaponsList = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
-
+    const list = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
     selectMenu
       .setPlaceholder(`🎯 Chọn Vũ khí ${roleUpper} của bạn...`)
-      .addOptions(weaponsList.map(w => ({
+      .addOptions(list.map(w => ({
         label: w.label,
         value: w.label,
         description: w.description,
@@ -92,7 +87,7 @@ function buildWeaponSelectMenu(eventId, role) {
         { 
           label: 'Hướng dẫn', 
           value: 'guide', 
-          description: 'Bấm nút Tank, DPS, Healer hoặc Support để hiện danh sách vũ khí', 
+          description: 'Bấm nút Tank, DPS, Healer hoặc Support để chọn vũ khí', 
           emoji: 'ℹ️' 
         }
       ]);
@@ -101,9 +96,6 @@ function buildWeaponSelectMenu(eventId, role) {
   return new ActionRowBuilder().addComponents(selectMenu);
 }
 
-/**
- * 2. Tạo Bảng Thông Báo Sự Kiện (Embed + Buttons + Select Menu)
- */
 function buildEventMessage(event, signups = [], currentRole = null) {
   const uppercaseTitle = (event.title || '').toUpperCase();
   const bigTitle = `# ⚔️ ${uppercaseTitle} ⚔️`;
@@ -127,13 +119,12 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     const list = signups.filter(s => s.role === r.key && s.status === 'attending');
     const valueStr = list.length > 0 
       ? list.map(s => {
-          // Tìm emoji tương ứng với vũ khí đã chọn của thành viên
           let weaponEmojiStr = '';
           if (s.job && WEAPONS_BY_ROLE[r.key]) {
             const foundWeapon = WEAPONS_BY_ROLE[r.key].find(w => w.label.toLowerCase() === s.job.toLowerCase());
             if (foundWeapon) weaponEmojiStr = `${foundWeapon.emoji} `;
           }
-          return `• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`;
+          return `• **${s.username}**${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`;
         }).join('\n')
       : '_Trống_';
     
@@ -153,7 +144,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   embed.addFields({ name: '🗓️ Lịch', value: `[Thêm vào Google Calendar](${gCalUrl})`, inline: false });
   embed.setFooter({ text: `Event #${event.id} • Tạo bởi ${event.creator_name || 'Admin'}` });
 
-  // Nút bấm phân vị trí Role
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
     new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
@@ -161,7 +151,6 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
   );
 
-  // Nút bấm trạng thái tham gia
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tentative_${event.id}`).setLabel('Tentative').setStyle(ButtonStyle.Secondary).setEmoji('❓'),
     new ButtonBuilder().setCustomId(`absence_${event.id}`).setLabel('Absence').setStyle(ButtonStyle.Secondary).setEmoji('❌'),

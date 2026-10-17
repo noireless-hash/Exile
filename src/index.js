@@ -3,10 +3,11 @@ const config = require('./config');
 const eventCommand = require('./commands/event');
 const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
+const BUILDS_DATA = require('./data/builds');
 
-// ==========================================
-// 0. BẮT LỖI TOÀN CỤC CHỐNG SẬP BOT (CRASH)
-// ==========================================
+const MODERATOR_CHANNEL_ID = '1352408303371812868';
+const sentBuildUsers = new Set();
+
 process.on('unhandledRejection', error => console.error('Lỗi Promise chưa được bắt:', error));
 process.on('uncaughtException', error => console.error('Lỗi Exception chưa được bắt:', error));
 
@@ -39,11 +40,9 @@ async function cleanupExpiredEvents() {
     for (const event of allEvents) {
       if (!event.channel_id || !event.message_id || !event.start_ts) continue;
 
-      // Chuẩn hóa timestamp về Miligiây
       const startMs = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
-      const expireMs = startMs + (15 * 60 * 1000); // Giờ hẹn + 15 phút
+      const expireMs = startMs + (15 * 60 * 1000);
 
-      // Nếu đã quá 15 phút so với giờ hẹn
       if (nowMs >= expireMs) {
         try {
           const channel = await client.channels.fetch(event.channel_id).catch(() => null);
@@ -58,7 +57,6 @@ async function cleanupExpiredEvents() {
           console.error(`Không thể xóa tin nhắn Event #${event.id}:`, err.message);
         }
 
-        // Xóa hoặc đánh dấu trong DB nếu cần
         if (typeof db.deleteEvent === 'function') {
           db.deleteEvent(event.id);
         }
@@ -70,14 +68,13 @@ async function cleanupExpiredEvents() {
 }
 
 /**
- * 2. TỰ ĐỘNG TẠO PHÒNG VOICE KHI ĐẾN GIỜ HẸN
+ * 2. TỰ ĐỘNG TẠO PHÒNG VOICE & GỬI DM BUILD THEO MESSAGE ID CHÍNH XÁC
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
   const startMs = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
   const delay = startMs - now;
 
-  // Nếu quá 15 phút rồi thì bỏ qua không tạo voice
   if (delay < -15 * 60 * 1000) return;
 
   setTimeout(async () => {
@@ -119,17 +116,62 @@ function scheduleEventRoomCreation(client, event) {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
           `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}`
+          `Mời các chiến hữu nhanh chóng ổn định vị trí:\n${mentions}\n` +
+          `*(Ảnh Build chuẩn đã được tự động gửi qua DM cho từng người)*`
         );
       } catch (err) {}
 
+      const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
+
+      // Gửi DM Build cho từng người
+      for (const memberSignup of attendingMembers) {
+        try {
+          const userKey = `${event.id}_${memberSignup.user_id}`;
+          if (sentBuildUsers.has(userKey)) continue;
+
+          const member = await guild.members.fetch(memberSignup.user_id).catch(() => null);
+          if (!member) continue;
+
+          const userWeapon = memberSignup.job;
+          let attachments = [];
+
+          // Tìm Message ID chính xác của Build trong Mod Channel
+          if (userWeapon && BUILDS_DATA[userWeapon] && modChannel) {
+            const targetMessageId = BUILDS_DATA[userWeapon].messageId;
+            const buildMessage = await modChannel.messages.fetch(targetMessageId).catch(() => null);
+
+            if (buildMessage && buildMessage.attachments.size > 0) {
+              attachments = Array.from(buildMessage.attachments.values()).map(a => a.url);
+            }
+          }
+
+          const dmPayload = {
+            content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
+                     `• Role: **${memberSignup.role || 'Chưa chọn'}**\n` +
+                     `• Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
+                     `• Phòng voice đã mở: <#${createdChannel.id}>\n` +
+                     `Dưới đây là **Build chuẩn** dành cho bạn:`
+          };
+
+          if (attachments.length > 0) {
+            dmPayload.files = attachments;
+          }
+
+          await member.send(dmPayload);
+          sentBuildUsers.add(userKey);
+
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          console.error(`Không thể gửi DM cho user ${memberSignup.user_id}:`, err.message);
+        }
+      }
+
     } catch (error) {
-      console.error(`Lỗi khi tạo voice cho sự kiện #${event.id}:`, error);
+      console.error(`Lỗi khi xử lý sự kiện #${event.id}:`, error);
     }
   }, Math.max(0, delay));
 }
 
-// Khai báo lại để gọi từ các file command nếu cần
 client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 client.trackEventForExpiration = () => {}; 
 
@@ -147,14 +189,10 @@ client.once('ready', async () => {
     console.error('Lỗi khi nạp sự kiện:', err);
   }
 
-  // Chạy kiểm tra xóa bài đăng quá hạn ngay khi bật bot và mỗi 10 giây
   cleanupExpiredEvents();
   setInterval(cleanupExpiredEvents, 10 * 1000);
 });
 
-/**
- * 3. TỰ ĐỘNG DỌN DẸP PHÒNG TRỐNG SAU 10 GIÂY
- */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
     const oldChannelId = oldState.channelId;
@@ -190,9 +228,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   } catch (error) {}
 });
 
-/**
- * 4. XỬ LÝ TƯƠNG TÁC NÚT BẤM & MENU CHỌN VŨ KHÍ
- */
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {

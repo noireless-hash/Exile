@@ -28,55 +28,60 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    // 1. Phản hồi ngay lập tức để tránh lỗi Timeout 3 giây của Discord
+    // 1. Phản hồi lập tức để tránh Timeout 3 giây từ Discord
     try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: true });
-      }
-    } catch (err) {
-      console.error('Lỗi deferReply:', err);
+      await interaction.deferReply({ ephemeral: true });
+    } catch (e) {
+      console.error('Không thể deferReply:', e);
     }
 
-    const subcommand = interaction.options.getSubcommand();
+    try {
+      const subcommand = interaction.options.getSubcommand();
 
-    if (subcommand === 'board') {
-      try {
+      if (subcommand === 'board') {
         const msgData = buildCreateBoardMessage();
         await interaction.channel.send(msgData);
         return interaction.editReply({ content: '✅ Đã gửi bảng tạo Event vào kênh!' });
-      } catch (err) {
-        console.error('Lỗi subcommand board:', err);
-        return interaction.editReply({ content: '❌ Không thể gửi bảng tạo Event!' });
       }
-    }
 
-    if (subcommand === 'create') {
-      try {
-        // Kiểm tra sự kiện gần nhất (nếu có)
-        if (typeof db.getLatestEvent === 'function') {
-          const previousEvent = db.getLatestEvent();
-          if (previousEvent) {
-            const previousSignups = db.getSignups(previousEvent.id) || [];
-            const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
+      if (subcommand === 'create') {
+        // Kiểm tra an toàn sự kiện cũ
+        try {
+          if (typeof db.getLatestEvent === 'function') {
+            const previousEvent = db.getLatestEvent();
+            if (previousEvent) {
+              const previousSignups = (typeof db.getSignups === 'function' ? db.getSignups(previousEvent.id) : []) || [];
+              const attendingCount = previousSignups.filter(s => s.status === 'attending').length;
 
-            if (attendingCount < 4) {
-              return interaction.editReply({
-                content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} - ${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu.`,
-              });
+              if (attendingCount < 4) {
+                return interaction.editReply({
+                  content: `❌ **Không thể tạo sự kiện mới!** Sự kiện trước đó (**#${previousEvent.id} -${previousEvent.title}**) chỉ có **${attendingCount}/4** người tham gia tối thiểu.`,
+                });
+              }
             }
           }
+        } catch (dbErr) {
+          console.warn('⚠️ Bỏ qua kiểm tra getLatestEvent do lỗi:', dbErr.message);
         }
 
         const title = interaction.options.getString('title');
         const timeStr = interaction.options.getString('time');
         const description = interaction.options.getString('description') || null;
 
-        const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
+        // Parse thời gian
+        let parsed = { valid: false, error: 'Không thể parse thời gian' };
+        try {
+          parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
+        } catch (pErr) {
+          console.error('Lỗi parseEventTime:', pErr);
+          return interaction.editReply({ content: `❌ Lỗi xử lý thời gian: ${pErr.message}` });
+        }
+
         if (!parsed.valid) {
           return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
-        // Lưu vào Database
+        // Tạo Event vào DB
         const event = db.createEvent({
           guild_id: interaction.guildId,
           channel_id: interaction.channelId,
@@ -90,9 +95,9 @@ module.exports = {
         });
 
         const eventId = event.id;
-        const signups = db.getSignups(eventId) || [];
+        const signups = (typeof db.getSignups === 'function' ? db.getSignups(eventId) : []) || [];
 
-        // Soạn giao diện tin nhắn - Truyền thêm interaction.guild để tự động bắt Emoji
+        // Soạn giao diện Embed tin nhắn
         const msgData = buildEventMessage(event, signups, null, interaction.guild);
 
         const sent = await interaction.channel.send(msgData);
@@ -101,7 +106,7 @@ module.exports = {
         }
         event.message_id = sent.id;
 
-        // Đăng ký theo dõi dọn dẹp tự động
+        // Đăng ký theo dõi tự động dọn dẹp
         if (typeof interaction.client.trackEventForExpiration === 'function') {
           interaction.client.trackEventForExpiration(interaction.channel.id, sent.id, eventId, event.start_ts, interaction.guildId);
         }
@@ -111,11 +116,11 @@ module.exports = {
         }
 
         return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
-
-      } catch (err) {
-        console.error('Lỗi khi tạo event:', err);
-        return interaction.editReply({ content: `❌ Lỗi hệ thống khi tạo Event: ${err.message}` }).catch(() => {});
       }
+    } catch (err) {
+      console.error('❌ LỖI CRITICAL KHI THỰC THI /event:', err);
+      // Hiển thị lỗi chính xác cho bạn biết thay vì bị im lặng báo timeout
+      return interaction.editReply({ content: `❌ Lỗi hệ thống: \`${err.message}\`` }).catch(() => {});
     }
   },
 };

@@ -4,9 +4,7 @@ const eventCommand = require('./commands/event');
 const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
 
-// ==========================================
-// 0. BẮT LỖI TOÀN CỤC ĐỂ CHỐNG SẬP NGUỒN (CRASH)
-// ==========================================
+// BẮT LỖI TOÀN CỤC CHỐNG SẬP
 process.on('unhandledRejection', error => {
   console.error('Lỗi Promise chưa được bắt (Unhandled Rejection):', error);
 });
@@ -33,20 +31,19 @@ const client = new Client({
 client.commands = new Collection();
 client.commands.set(eventCommand.data.name, eventCommand);
 
-// Cấu hình ID kênh lưu trữ build chuẩn
-const MODERATOR_CHANNEL_ID = '1352408303371812868';
+const MODERATOR_CHANNEL_ID = '1352408303371812868'; // Kênh lưu trữ ảnh build
 
 const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
 const activeEventsTracker = new Map();
-const sentBuildUsers = new Set(); // Chống gửi trùng DM trong mỗi sự kiện
+const sentBuildUsers = new Set();
 
 /**
- * 1. ĐĂNG KÝ THEO DÕI SỰ KIỆN ĐỂ TỰ ĐỘNG XÓA SAU 15 PHÚT KỂ TỪ GIỜ HẸN
+ * 1. Đăng ký theo dõi tự động xóa bài đăng sau 15 phút từ giờ hẹn
  */
 function trackEventForExpiration(channelId, messageId, eventId, startTimestamp, guildId) {
   const millis = startTimestamp < 10000000000 ? startTimestamp * 1000 : startTimestamp;
-  const expirationTime = millis + (15 * 60 * 1000); // Giờ hẹn + 15 phút
+  const expirationTime = millis + (15 * 60 * 1000);
 
   activeEventsTracker.set(eventId, {
     channelId,
@@ -59,16 +56,14 @@ function trackEventForExpiration(channelId, messageId, eventId, startTimestamp, 
 client.trackEventForExpiration = trackEventForExpiration;
 
 /**
- * 2. Tự động tạo phòng thoại khi đến giờ hẹn và gửi Build chuẩn qua DM
+ * 2. Tự động tạo phòng thoại & quét kho Moderator gửi đúng Build ID qua DM
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
   const millis = event.start_ts < 10000000000 ? event.start_ts * 1000 : event.start_ts;
   const delay = millis - now;
 
-  if (delay < -15 * 60 * 1000) {
-    return;
-  }
+  if (delay < -15 * 60 * 1000) return;
 
   const executionDelay = Math.max(0, delay);
 
@@ -81,21 +76,12 @@ function scheduleEventRoomCreation(client, event) {
       const signups = db.getSignups(event.id);
       const attendingMembers = signups.filter(s => s.status === 'attending');
 
-      if (attendingMembers.length === 0) {
-        console.log(`⚠️ Sự kiện #${event.id} (${event.title}) đến giờ nhưng không có ai đăng ký.`);
-        return;
-      }
+      if (attendingMembers.length === 0) return;
 
-      // Cấu hình quyền riêng tư cho Voice Channel
+      // Cấp quyền Voice Channel
       const permissionOverwrites = [
-        {
-          id: guild.roles.everyone.id,
-          deny: ['ViewChannel', 'Connect'],
-        },
-        {
-          id: client.user.id,
-          allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'],
-        }
+        { id: guild.roles.everyone.id, deny: ['ViewChannel', 'Connect'] },
+        { id: client.user.id, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'] }
       ];
 
       for (const memberSignup of attendingMembers) {
@@ -105,7 +91,7 @@ function scheduleEventRoomCreation(client, event) {
         });
       }
 
-      // Tạo Voice Channel riêng cho sự kiện
+      // Tạo Voice Channel
       const roomName = `⚔️│${event.title}`.toLowerCase().replace(/\s+/g, '-');
       const createdChannel = await guild.channels.create({
         name: roomName,
@@ -115,21 +101,18 @@ function scheduleEventRoomCreation(client, event) {
 
       createdChannelId = createdChannel.id;
       managedEventRooms.add(createdChannel.id);
-      console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
-      // Thông báo chung trong phòng thoại
+      // Thông báo trong phòng Voice
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
           `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-          `Mời các chiến hữu nhanh chóng ổn định vị trí, chuẩn bị xuất phát:\n${mentions}\n` +
-          `*(Hệ thống đã tự động gửi Build chuẩn riêng qua tin nhắn trực tiếp - DM cho từng người)*`
+          `Mời các chiến hữu tập trung chuẩn bị:\n${mentions}\n` +
+          `*(Build chuẩn đã được tự động gửi qua DM cho từng người)*`
         );
-      } catch (err) {
-        console.error('Không thể gửi thông báo trong voice channel.');
-      }
+      } catch (err) {}
 
-      // Quét kho Moderator để gửi đúng Build riêng theo ID / Vũ khí qua DM
+      // Lấy danh sách bài viết từ kênh Moderator
       const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
       let modMessages = [];
       if (modChannel) {
@@ -137,6 +120,7 @@ function scheduleEventRoomCreation(client, event) {
         if (fetched) modMessages = Array.from(fetched.values());
       }
 
+      // Quét gửi DM cho từng thành viên tham gia
       for (const memberSignup of attendingMembers) {
         try {
           const userKey = `${event.id}_${memberSignup.user_id}`;
@@ -150,7 +134,7 @@ function scheduleEventRoomCreation(client, event) {
 
           let bestMatchUrl = null;
 
-          // Thuật toán tìm kiếm theo ID / Tên vũ khí chính xác 100%
+          // Khớp chính xác 100% theo ID / Tên vũ khí
           for (const msg of modMessages) {
             const content = (msg.content || '').toLowerCase();
             const embedDesc = msg.embeds.length > 0 ? (msg.embeds[0].description || '').toLowerCase() : '';
@@ -161,16 +145,12 @@ function scheduleEventRoomCreation(client, event) {
             if (!hasImage) continue;
 
             if (userWeapon && fullText.includes(userWeapon)) {
-              if (msg.attachments.size > 0) {
-                bestMatchUrl = msg.attachments.first().url;
-              } else if (msg.embeds.length > 0 && msg.embeds[0].image) {
-                bestMatchUrl = msg.embeds[0].image.url;
-              }
+              bestMatchUrl = msg.attachments.size > 0 ? msg.attachments.first().url : msg.embeds[0].image.url;
               break;
             }
           }
 
-          // Dự phòng theo Role nếu chưa chọn vũ khí cụ thể
+          // Dự phòng theo Role nếu chưa chọn vũ khí
           if (!bestMatchUrl && userRole) {
             for (const msg of modMessages) {
               const fullText = `${msg.content || ''} ${msg.embeds[0]?.description || ''}`.toLowerCase();
@@ -185,9 +165,9 @@ function scheduleEventRoomCreation(client, event) {
           const channelMention = createdChannelId ? `<#${createdChannelId}>` : 'Phòng thoại sự kiện';
           const dmPayload = {
             content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-                     `Role của bạn: **${memberSignup.role || 'Chưa rõ'}** | Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
-                     `Phòng thoại riêng đã sẵn sàng: ${channelMention}\n` +
-                     `Dưới đây là **Build chuẩn** dành riêng cho nhiệm vụ của bạn:`
+                     `Role của bạn: **${memberSignup.role || 'Chưa chọn'}** | Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
+                     `Phòng thoại riêng đã mở: ${channelMention}\n` +
+                     `Dưới đây là **Build chuẩn** dành cho bạn:`
           };
 
           if (bestMatchUrl) {
@@ -199,12 +179,12 @@ function scheduleEventRoomCreation(client, event) {
 
           await new Promise(resolve => setTimeout(resolve, 500));
         } catch (err) {
-          console.error(`Không thể gửi DM cho user ${memberSignup.user_id}:`, err);
+          console.error(`Không thể gửi DM cho user ${memberSignup.user_id}`);
         }
       }
 
     } catch (error) {
-      console.error(`Lỗi khi xử lý giờ hẹn cho sự kiện #${event.id}:`, error);
+      console.error(`Lỗi xử lý giờ hẹn event #${event.id}:`, error);
     }
   }, executionDelay);
 }
@@ -212,7 +192,7 @@ function scheduleEventRoomCreation(client, event) {
 client.scheduleEventRoomCreation = scheduleEventRoomCreation;
 
 client.once('ready', async () => {
-  console.log(`🤖 Bot đã sẵn sàng với tên: ${client.user.tag}`);
+  console.log(`🤖 Bot đã sẵn sàng: ${client.user.tag}`);
 
   try {
     const allEvents = db.getAllEvents ? db.getAllEvents() : [];
@@ -222,11 +202,9 @@ client.once('ready', async () => {
         scheduleEventRoomCreation(client, event);
       }
     }
-  } catch (err) {
-    console.error('Lỗi khi nạp sự kiện:', err);
-  }
+  } catch (err) {}
 
-  // Quét thời gian thực mỗi 10 giây để xóa bài đăng quá 15 phút
+  // Quét thời gian thực mỗi 10 giây để xóa bài đăng hết hạn 15 phút
   setInterval(async () => {
     const now = Date.now();
     for (const [eventId, data] of activeEventsTracker.entries()) {
@@ -237,12 +215,10 @@ client.once('ready', async () => {
             const message = await channel.messages.fetch(data.messageId).catch(() => null);
             if (message) {
               await message.delete().catch(() => {});
-              console.log(`🗑️ [Xóa tự động] Đã xóa thành công bài đăng sự kiện #${eventId} sau 15 phút.`);
+              console.log(`🗑️ Đã xóa bài đăng sự kiện #${eventId} sau 15 phút.`);
             }
           }
-        } catch (err) {
-          console.error(`Không thể xóa tin nhắn sự kiện #${eventId}:`, err);
-        }
+        } catch (err) {}
         activeEventsTracker.delete(eventId);
       }
     }
@@ -250,7 +226,7 @@ client.once('ready', async () => {
 });
 
 /**
- * 3. Tự động dọn dẹp phòng thoại trống sau 10 giây
+ * 3. Tự động xóa phòng voice trống sau 10 giây
  */
 client.on('voiceStateUpdate', async (oldState, newState) => {
   try {
@@ -274,11 +250,9 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
               if (currentChannel && currentChannel.members.size === 0) {
                 await currentChannel.delete();
                 managedEventRooms.delete(oldChannelId);
-                console.log(`🧹 Đã dọn dẹp phòng thoại trống: ${currentChannel.name}`);
+                console.log(`🧹 Đã dọn dẹp phòng trống: ${currentChannel.name}`);
               }
-            } catch (err) {
-              console.error('Lỗi khi xóa phòng trống:', err);
-            }
+            } catch (err) {}
             emptyRoomTimeouts.delete(oldChannelId);
           }, 10 * 1000);
 
@@ -286,11 +260,12 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         }
       }
     }
-  } catch (error) {
-    console.error('Lỗi xử lý voiceStateUpdate:', error);
-  }
+  } catch (error) {}
 });
 
+/**
+ * 4. Xử lý tương tác Nút bấm & Select Menu
+ */
 client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
@@ -322,4 +297,43 @@ client.on('interactionCreate', async (interaction) => {
       if (['tank', 'dps', 'healer', 'support'].includes(action)) {
         const roleName = action.toUpperCase();
         db.upsertSignup(eventId, userId, username, { role: roleName, status: 'attending' });
-        activeRoleForMenu
+        activeRoleForMenu = roleName; 
+      } else if (action === 'withdraw') {
+        db.removeSignup(eventId, userId);
+      } else if (action === 'tentative') {
+        db.upsertSignup(eventId, userId, username, { status: 'tentative' });
+      } else if (action === 'absence') {
+        db.upsertSignup(eventId, userId, username, { status: 'absence' });
+      } else if (action === 'weapon') {
+        const roleType = parts[1] ? parts[1].toUpperCase() : null;
+        const selectedWeapon = interaction.values[0];
+        
+        db.upsertSignup(eventId, userId, username, { job: selectedWeapon });
+        activeRoleForMenu = roleType;
+      }
+
+      const signups = db.getSignups(eventId);
+      const userSignup = db.getSignup(eventId, userId);
+      if (userSignup && userSignup.role) {
+        activeRoleForMenu = userSignup.role;
+      }
+
+      // TRUYỀN THÊM interaction.guild ĐỂ QUÉT EMOJI DỘNG
+      const msgData = buildEventMessage(event, signups, activeRoleForMenu, interaction.guild);
+
+      if (interaction.message) {
+        await interaction.message.edit(msgData);
+      }
+    }
+  } catch (error) {
+    console.error('Lỗi tương tác:', error);
+    const content = '❌ Có lỗi xảy ra khi thực hiện tương tác này!';
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content, ephemeral: true }).catch(() => {});
+    } else {
+      await interaction.reply({ content, ephemeral: true }).catch(() => {});
+    }
+  }
+});
+
+client.login(config.token);

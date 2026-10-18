@@ -35,6 +35,48 @@ const managedEventRooms = new Set();
 const emptyRoomTimeouts = new Map();
 
 /**
+ * Hàm phụ trợ: Gửi DM ảnh Build cho 1 người chơi cụ thể
+ */
+async function sendBuildDMToUser(guild, event, userId, userRole, userWeapon) {
+  const userKey = `${event.id}_${userId}`;
+  
+  try {
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    let attachments = [];
+    const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
+
+    // Tìm Message ID chính xác của Build từ data/builds.js
+    if (userWeapon && BUILDS_DATA[userWeapon] && modChannel) {
+      const targetMessageId = BUILDS_DATA[userWeapon].messageId;
+      const buildMessage = await modChannel.messages.fetch(targetMessageId).catch(() => null);
+
+      if (buildMessage && buildMessage.attachments.size > 0) {
+        attachments = Array.from(buildMessage.attachments.values()).map(a => a.url);
+      }
+    }
+
+    const dmPayload = {
+      content: `🚨 **THÔNG BÁO TẢI BUILD TỪ SỰ KIỆN: [${event.title}]!**\n` +
+               `• Role: **${userRole || 'Chưa chọn'}**\n` +
+               `• Vũ khí: **${userWeapon || 'Chưa chọn'}**\n` +
+               `Dưới đây là **Build chuẩn** dành cho bạn:`
+    };
+
+    if (attachments.length > 0) {
+      dmPayload.files = attachments;
+    }
+
+    await member.send(dmPayload);
+    sentBuildUsers.add(userKey);
+    console.log(`📩 Đã gửi DM Build (${userWeapon}) thành công cho ${member.user.tag}`);
+  } catch (err) {
+    console.error(`Không thể gửi DM cho user ${userId}:`, err.message);
+  }
+}
+
+/**
  * 1. QUÉT HỆ THỐNG XÓA BÀI ĐĂNG SỰ KIỆN HẾT HẠN (GIỜ HẸN + 15 PHÚT)
  */
 async function cleanupExpiredEvents() {
@@ -47,7 +89,6 @@ async function cleanupExpiredEvents() {
     for (const event of allEvents) {
       if (!event.start_ts) continue;
 
-      // Chuẩn hóa start_ts về dạng Giây (Unix timestamp 10 chữ số)
       const startSec = Number(event.start_ts) > 10000000000 
         ? Math.floor(Number(event.start_ts) / 1000) 
         : Number(event.start_ts);
@@ -70,7 +111,6 @@ async function cleanupExpiredEvents() {
           }
         }
 
-        // Xóa Event khỏi CSDL SQLite để không lặp lại quét dọn
         if (typeof db.deleteEvent === 'function') {
           db.deleteEvent(event.id);
         }
@@ -82,14 +122,13 @@ async function cleanupExpiredEvents() {
 }
 
 /**
- * 2. TỰ ĐỘNG TẠO PHÒNG VOICE & GỬI DM BUILD THEO MESSAGE ID CHÍNH XÁC
+ * 2. TỰ ĐỘNG TẠO PHÒNG VOICE & GỬI DM BUILD
  */
 function scheduleEventRoomCreation(client, event) {
   const now = Date.now();
   const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
   const delay = startMs - now;
 
-  // Nếu sự kiện đã quá 15 phút thì bỏ qua không tạo voice
   if (delay < -15 * 60 * 1000) return;
 
   setTimeout(async () => {
@@ -105,7 +144,6 @@ function scheduleEventRoomCreation(client, event) {
         return;
       }
 
-      // Phân quyền cho phòng thoại riêng
       const permissionOverwrites = [
         { id: guild.roles.everyone.id, deny: ['ViewChannel', 'Connect'] },
         { id: client.user.id, allow: ['ViewChannel', 'Connect', 'Speak', 'ManageChannels'] }
@@ -128,7 +166,6 @@ function scheduleEventRoomCreation(client, event) {
       managedEventRooms.add(createdChannel.id);
       console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
 
-      // Nhắc nhở người tham gia trong voice
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
         await createdChannel.send(
@@ -138,50 +175,13 @@ function scheduleEventRoomCreation(client, event) {
         );
       } catch (err) {}
 
-      const modChannel = await guild.channels.fetch(MODERATOR_CHANNEL_ID).catch(() => null);
-
-      // Gửi DM Build riêng cho từng người tham gia
+      // Gửi DM cho những người đã chọn vũ khí trước đó
       for (const memberSignup of attendingMembers) {
-        try {
-          const userKey = `${event.id}_${memberSignup.user_id}`;
-          if (sentBuildUsers.has(userKey)) continue;
+        const userKey = `${event.id}_${memberSignup.user_id}`;
+        if (sentBuildUsers.has(userKey)) continue;
 
-          const member = await guild.members.fetch(memberSignup.user_id).catch(() => null);
-          if (!member) continue;
-
-          const userWeapon = memberSignup.job;
-          let attachments = [];
-
-          // Tìm Message ID chính xác của Build từ data/builds.js
-          if (userWeapon && BUILDS_DATA[userWeapon] && modChannel) {
-            const targetMessageId = BUILDS_DATA[userWeapon].messageId;
-            const buildMessage = await modChannel.messages.fetch(targetMessageId).catch(() => null);
-
-            if (buildMessage && buildMessage.attachments.size > 0) {
-              attachments = Array.from(buildMessage.attachments.values()).map(a => a.url);
-            }
-          }
-
-          const dmPayload = {
-            content: `🚨 **ĐÃ ĐẾN GIỜ SỰ KIỆN: [${event.title}]!**\n` +
-                     `• Role: **${memberSignup.role || 'Chưa chọn'}**\n` +
-                     `• Vũ khí: **${memberSignup.job || 'Chưa chọn'}**\n` +
-                     `• Phòng voice đã mở: <#${createdChannel.id}>\n` +
-                     `Dưới đây là **Build chuẩn** dành cho bạn:`
-          };
-
-          if (attachments.length > 0) {
-            dmPayload.files = attachments;
-          }
-
-          await member.send(dmPayload);
-          sentBuildUsers.add(userKey);
-
-          // Tạm dừng 0.5s để tránh dính Rate Limit DM từ Discord
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (err) {
-          console.error(`Không thể gửi DM cho user ${memberSignup.user_id}:`, err.message);
-        }
+        await sendBuildDMToUser(guild, event, memberSignup.user_id, memberSignup.role, memberSignup.job);
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
     } catch (error) {
@@ -207,7 +207,6 @@ client.once('ready', async () => {
     console.error('Lỗi khi nạp danh sách sự kiện:', err);
   }
 
-  // Quét dọn dẹp ngay khi bật bot và chạy định kỳ mỗi 10 giây
   cleanupExpiredEvents();
   setInterval(cleanupExpiredEvents, 10 * 1000);
 });
@@ -262,7 +261,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // Nút bấm mở Form/Modal tạo Farm Camp
     if (interaction.isButton() && interaction.customId === 'open_farm_camp_modal') {
       const modal = new ModalBuilder()
         .setCustomId('submit_farm_camp_modal')
@@ -291,7 +289,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // Xử lý khi người dùng ấn "Gửi" từ Form Modal Farm Camp
     if (interaction.isModalSubmit() && interaction.customId === 'submit_farm_camp_modal') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -304,7 +301,6 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
       }
 
-      // Tạo Event vào SQLite Database
       const createdEvent = db.createEvent({
         guild_id: interaction.guildId,
         channel_id: interaction.channelId,
@@ -321,16 +317,13 @@ client.on('interactionCreate', async (interaction) => {
       const signups = db.getSignups(eventId) || [];
       const msgData = buildEventMessage(createdEvent, signups, null);
 
-      // Đăng tin nhắn sự kiện lên kênh Discord
       const sent = await interaction.channel.send(msgData);
 
-      // QUAN TRỌNG: Lưu message_id chính xác vào CSDL để tính năng tự xóa hoạt động
       if (typeof db.setEventMessage === 'function') {
         db.setEventMessage(eventId, sent.id);
       }
       createdEvent.message_id = sent.id;
 
-      // Lên lịch tự động tạo phòng voice
       if (typeof client.scheduleEventRoomCreation === 'function') {
         client.scheduleEventRoomCreation(client, createdEvent);
       }
@@ -338,7 +331,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.editReply({ content: `✅ Đã tạo sự kiện **FARM CAMP GROUP #${eventId}** thành công!` });
     }
 
-    // Xử lý nút chọn Role / Trạng thái / Menu Vũ khí
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
       const customId = interaction.customId;
       const parts = customId.split('_');
@@ -361,7 +353,6 @@ client.on('interactionCreate', async (interaction) => {
       if (['tank', 'dps', 'healer', 'support'].includes(action)) {
         const roleName = action.toUpperCase();
         
-        // Reset vũ khí khi đổi Role
         const currentSignup = db.getSignup(eventId, userId);
         if (currentSignup && currentSignup.role !== roleName) {
           db.upsertSignup(eventId, userId, username, { role: roleName, job: null, status: 'attending' });
@@ -382,6 +373,18 @@ client.on('interactionCreate', async (interaction) => {
         
         db.upsertSignup(eventId, userId, username, { job: selectedWeapon });
         activeRoleForMenu = roleType;
+
+        // XỬ LÝ CHO NGƯỜI FILL TRỄ: Gửi DM ngay nếu sự kiện đã/đang diễn ra
+        const nowMs = Date.now();
+        const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
+        
+        // Nếu chọn vũ khí tại thời điểm gần/đã đến giờ hẹn thì lập tức gửi DM ảnh build
+        if (nowMs >= (startMs - 5 * 60 * 1000)) { // Trong vòng 5 phút trước giờ hẹn hoặc muộn hơn
+          const updatedSignup = db.getSignup(eventId, userId);
+          if (updatedSignup && updatedSignup.job) {
+            sendBuildDMToUser(interaction.guild, event, userId, updatedSignup.role, updatedSignup.job);
+          }
+        }
       }
 
       const signups = db.getSignups(eventId);

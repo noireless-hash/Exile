@@ -2,6 +2,14 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 const BUILDS_DATA = require('../data/builds');
 
+// Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role
+const CORE_SLOTS_BY_ROLE = {
+  TANK: ['Dreadstorm Monarch'],
+  HEALER: ['Blight Staff'],
+  SUPPORT: [],
+  DPS: ['Lightcaller', 'Hellspawn Staff']
+};
+
 /**
  * Tự động tạo bảng WEAPONS_BY_ROLE trực tiếp từ file data/builds.js
  */
@@ -29,7 +37,6 @@ function buildWeaponSelectMenu(eventId, role) {
     .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   if (roleUpper && WEAPONS_BY_ROLE[roleUpper]) {
-    // Discord giới hạn tối đa 25 tùy chọn trong 1 Select Menu
     const weaponsList = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
 
     selectMenu
@@ -42,12 +49,12 @@ function buildWeaponSelectMenu(eventId, role) {
       })));
   } else {
     selectMenu
-      .setPlaceholder('🎯 Vui lòng chọn Role (Tank/DPS/Healer/Support) ở trên trước...')
+      .setPlaceholder('🎯 Vui lòng chọn Role (Tank/Healer/Support/DPS) ở trên trước...')
       .addOptions([
         { 
           label: 'Hướng dẫn', 
           value: 'guide', 
-          description: 'Bấm nút Tank, DPS, Healer hoặc Support để chọn danh sách vũ khí', 
+          description: 'Bấm nút Tank, Healer, Support hoặc DPS để chọn danh sách vũ khí', 
           emoji: 'ℹ️' 
         }
       ]);
@@ -71,26 +78,48 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
 
+  // Sắp xếp thứ tự ưu tiên các Core Role hiển thị trước
   const roles = [
     { name: '🛡️ Tank', key: 'TANK' },
-    { name: '⚔️ DPS', key: 'DPS' },
     { name: '🌿 Healer', key: 'HEALER' },
     { name: '⚡ Support', key: 'SUPPORT' },
+    { name: '⚔️ DPS', key: 'DPS' },
   ];
 
   for (const r of roles) {
     const list = signups.filter(s => s.role === r.key && s.status === 'attending');
-    const valueStr = list.length > 0 
-      ? list.map(s => {
-          let weaponEmojiStr = '';
-          if (s.job && BUILDS_DATA[s.job]) {
-            const cleanEmojiName = s.job.replace(/[^a-zA-Z0-9]/g, '');
-            weaponEmojiStr = `<:${cleanEmojiName}:${BUILDS_DATA[s.job].emojiId}> `;
-          }
-          return `• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`;
-        }).join('\n')
-      : '_Trống_';
-    
+    const requiredCoreWeapons = CORE_SLOTS_BY_ROLE[r.key] || [];
+    let displayLines = [];
+
+    // 1. Ghim sẵn các slot vũ khí Core lên trên cùng
+    for (const coreWeaponName of requiredCoreWeapons) {
+      const assignedUser = list.find(s => s.job && s.job.toLowerCase() === coreWeaponName.toLowerCase());
+      
+      let weaponEmojiStr = '';
+      if (BUILDS_DATA[coreWeaponName]) {
+        const cleanName = coreWeaponName.replace(/[^a-zA-Z0-9]/g, '');
+        weaponEmojiStr = `<:${cleanName}:${BUILDS_DATA[coreWeaponName].emojiId}> `;
+      }
+
+      if (assignedUser) {
+        displayLines.push(`• **${assignedUser.username}** (${weaponEmojiStr}${assignedUser.job})`);
+      } else {
+        displayLines.push(`• _Trống_ (${weaponEmojiStr}${coreWeaponName})`);
+      }
+    }
+
+    // 2. Hiển thị các thành viên đăng ký các vũ khí khác ngoài Core ghim
+    const otherUsers = list.filter(s => !s.job || !requiredCoreWeapons.some(cw => cw.toLowerCase() === s.job.toLowerCase()));
+    for (const s of otherUsers) {
+      let weaponEmojiStr = '';
+      if (s.job && BUILDS_DATA[s.job]) {
+        const cleanEmojiName = s.job.replace(/[^a-zA-Z0-9]/g, '');
+        weaponEmojiStr = `<:${cleanEmojiName}:${BUILDS_DATA[s.job].emojiId}> `;
+      }
+      displayLines.push(`• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`);
+    }
+
+    const valueStr = displayLines.length > 0 ? displayLines.join('\n') : '_Trống_';
     embed.addFields({ name: `${r.name} (${list.length})`, value: valueStr, inline: true });
   }
 
@@ -110,9 +139,9 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   // Nút bấm chọn Role
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`tank_${event.id}`).setLabel('Tank').setStyle(ButtonStyle.Primary).setEmoji('🛡️'),
-    new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
     new ButtonBuilder().setCustomId(`healer_${event.id}`).setLabel('Healer').setStyle(ButtonStyle.Primary).setEmoji('🌿'),
     new ButtonBuilder().setCustomId(`support_${event.id}`).setLabel('Support').setStyle(ButtonStyle.Primary).setEmoji('⚡'),
+    new ButtonBuilder().setCustomId(`dps_${event.id}`).setLabel('DPS').setStyle(ButtonStyle.Primary).setEmoji('⚔️'),
   );
 
   // Nút bấm chọn Trạng Thái

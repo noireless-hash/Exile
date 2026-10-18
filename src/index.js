@@ -261,6 +261,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // Nút bấm mở Modal Form Farm Camp
     if (interaction.isButton() && interaction.customId === 'open_farm_camp_modal') {
       const modal = new ModalBuilder()
         .setCustomId('submit_farm_camp_modal')
@@ -289,6 +290,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // Xử lý khi người dùng ấn "Gửi" từ Form Modal Farm Camp
     if (interaction.isModalSubmit() && interaction.customId === 'submit_farm_camp_modal') {
       await interaction.deferReply({ ephemeral: true });
 
@@ -331,6 +333,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.editReply({ content: `✅ Đã tạo sự kiện **FARM CAMP GROUP #${eventId}** thành công!` });
     }
 
+    // Xử lý chọn Role, Trạng Thái & Select Menu Vũ Khí
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
       const customId = interaction.customId;
       const parts = customId.split('_');
@@ -374,12 +377,11 @@ client.on('interactionCreate', async (interaction) => {
         db.upsertSignup(eventId, userId, username, { job: selectedWeapon });
         activeRoleForMenu = roleType;
 
-        // XỬ LÝ CHO NGƯỜI FILL TRỄ: Gửi DM ngay nếu sự kiện đã/đang diễn ra
+        // XỬ LÝ CHO NGƯỜI FILL TRỄ: Gửi DM ngay nếu chọn vũ khí vào sát/sau giờ hẹn
         const nowMs = Date.now();
         const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
         
-        // Nếu chọn vũ khí tại thời điểm gần/đã đến giờ hẹn thì lập tức gửi DM ảnh build
-        if (nowMs >= (startMs - 5 * 60 * 1000)) { // Trong vòng 5 phút trước giờ hẹn hoặc muộn hơn
+        if (nowMs >= (startMs - 5 * 60 * 1000)) { 
           const updatedSignup = db.getSignup(eventId, userId);
           if (updatedSignup && updatedSignup.job) {
             sendBuildDMToUser(interaction.guild, event, userId, updatedSignup.role, updatedSignup.job);

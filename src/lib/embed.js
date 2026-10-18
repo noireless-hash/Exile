@@ -124,7 +124,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
         displayLines.push(`• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`);
       }
     } 
-    // TRƯỜNG HỢP 2: CÁC EVENT KHÁC (SMC, ZVZ, AVATAR, GANK...) -> HIỂN THỊ ĐƠN GIẢN THƯỜNG
+    // TRƯỜNG HỢP 2: CÁC EVENT KHÁC (SMC, ZVZ, GANK...) -> HIỂN THỊ THƯỜNG
     else {
       if (list.length > 0) {
         for (const s of list) {

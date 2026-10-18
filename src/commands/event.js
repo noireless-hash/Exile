@@ -25,6 +25,17 @@ module.exports = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName('farm')
+        .setDescription('Tạo nhanh sự kiện FARM CAMP GROUP với các slot Core ghim sẵn')
+        .addStringOption((opt) =>
+          opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName('description').setDescription('Yêu cầu Min IP / Gear Tier (Mặc định: Min 1400 IP)').setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName('board')
         .setDescription('Đăng bảng bấm nút tạo Event cố định vào kênh này')
     ),
@@ -40,6 +51,7 @@ module.exports = {
 
     const subcommand = interaction.options.getSubcommand();
 
+    // 1. XỬ LÝ ĐĂNG BẢNG
     if (subcommand === 'board') {
       try {
         const msgData = buildCreateBoardMessage();
@@ -50,7 +62,8 @@ module.exports = {
       }
     }
 
-    if (subcommand === 'create') {
+    // 2. XỬ LÝ TẠO EVENT CHUNG HOẶC EVENT FARM CAMP
+    if (subcommand === 'create' || subcommand === 'farm') {
       const userId = interaction.user.id;
 
       if (creationLocks.has(userId)) {
@@ -60,6 +73,7 @@ module.exports = {
       creationLocks.add(userId);
 
       try {
+        // Kiểm tra điều kiện Event trước đó đủ 4 người hay chưa
         if (typeof db.getLatestEvent === 'function') {
           const previousEvent = db.getLatestEvent();
           if (previousEvent) {
@@ -75,9 +89,19 @@ module.exports = {
           }
         }
 
-        const title = interaction.options.getString('title');
+        // Tự động gán Tiêu đề và Mô tả mặc định nếu là Form Farm Camp
+        let title = '';
+        let description = null;
+
+        if (subcommand === 'farm') {
+          title = 'FARM CAMP GROUP';
+          description = interaction.options.getString('description') || 'Yêu cầu Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
+        } else {
+          title = interaction.options.getString('title');
+          description = interaction.options.getString('description') || null;
+        }
+
         const timeStr = interaction.options.getString('time');
-        const description = interaction.options.getString('description') || null;
 
         const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
         if (!parsed.valid) {
@@ -100,7 +124,7 @@ module.exports = {
         const eventId = event.id;
         const signups = (typeof db.getSignups === 'function' ? db.getSignups(eventId) : []) || [];
 
-        // Soạn giao diện đơn giản - không cần truyền tham số guild
+        // Soạn giao diện bảng Event với các slot Core được ghim sẵn từ lib/embed.js
         const msgData = buildEventMessage(event, signups, null);
 
         const sent = await interaction.channel.send(msgData);
@@ -118,7 +142,7 @@ module.exports = {
         }
 
         creationLocks.delete(userId);
-        return interaction.editReply({ content: `✅ Đã tạo Event **#${eventId}** thành công!` });
+        return interaction.editReply({ content: `✅ Đã tạo Sự kiện **${title} #${eventId}** thành công!` });
 
       } catch (err) {
         creationLocks.delete(userId);

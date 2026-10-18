@@ -42,31 +42,35 @@ async function cleanupExpiredEvents() {
     if (typeof db.getAllEvents !== 'function') return;
 
     const allEvents = db.getAllEvents() || [];
-    const nowMs = Date.now();
+    const nowSec = Math.floor(Date.now() / 1000);
 
     for (const event of allEvents) {
-      if (!event.channel_id || !event.message_id || !event.start_ts) continue;
+      if (!event.start_ts) continue;
 
-      // Chuẩn hóa Unix timestamp (giây) sang miligiây
-      const startMs = Number(event.start_ts) < 10000000000 ? Number(event.start_ts) * 1000 : Number(event.start_ts);
-      const expireMs = startMs + (15 * 60 * 1000); // Giờ hẹn + 15 phút
+      // Chuẩn hóa start_ts về dạng Giây (Unix timestamp 10 chữ số)
+      const startSec = Number(event.start_ts) > 10000000000 
+        ? Math.floor(Number(event.start_ts) / 1000) 
+        : Number(event.start_ts);
 
-      // Đã quá thời hạn 15 phút
-      if (nowMs >= expireMs) {
-        try {
-          const channel = await client.channels.fetch(event.channel_id).catch(() => null);
-          if (channel) {
-            const message = await channel.messages.fetch(event.message_id).catch(() => null);
-            if (message) {
-              await message.delete().catch(err => console.error(`Lỗi xóa tin nhắn Event #${event.id}:`, err.message));
-              console.log(`🗑️ [Xóa tự động] Đã xóa bài đăng Event #${event.id} (${event.title})`);
+      const expireSec = startSec + (15 * 60); // Đã quá 15 phút tính từ giờ hẹn
+
+      if (nowSec >= expireSec) {
+        if (event.channel_id && event.message_id) {
+          try {
+            const channel = await client.channels.fetch(event.channel_id).catch(() => null);
+            if (channel) {
+              const message = await channel.messages.fetch(event.message_id).catch(() => null);
+              if (message) {
+                await message.delete().catch(err => console.error(`Lỗi xóa tin nhắn Event #${event.id}:`, err.message));
+                console.log(`🗑️ [Thành công] Đã xóa bài đăng Event #${event.id} (${event.title})`);
+              }
             }
+          } catch (fetchErr) {
+            console.error(`Không thể xóa bài đăng Event #${event.id}:`, fetchErr.message);
           }
-        } catch (fetchErr) {
-          console.error(`Không thể xóa bài đăng Event #${event.id}:`, fetchErr.message);
         }
 
-        // Xóa Event khỏi SQLite CSDL để không quét lại lần sau
+        // Xóa Event khỏi CSDL SQLite để không lặp lại quét dọn
         if (typeof db.deleteEvent === 'function') {
           db.deleteEvent(event.id);
         }
@@ -203,7 +207,7 @@ client.once('ready', async () => {
     console.error('Lỗi khi nạp danh sách sự kiện:', err);
   }
 
-  // Quét dọn dẹp ngay khi bật bot và mỗi 10 giây
+  // Quét dọn dẹp ngay khi bật bot và chạy định kỳ mỗi 10 giây
   cleanupExpiredEvents();
   setInterval(cleanupExpiredEvents, 10 * 1000);
 });
@@ -258,7 +262,7 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // Xử lý nút bấm mở Modal Form Farm Camp
+    // Nút bấm mở Form/Modal tạo Farm Camp
     if (interaction.isButton() && interaction.customId === 'open_farm_camp_modal') {
       const modal = new ModalBuilder()
         .setCustomId('submit_farm_camp_modal')
@@ -300,7 +304,8 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
       }
 
-      const event = db.createEvent({
+      // Tạo Event vào SQLite Database
+      const createdEvent = db.createEvent({
         guild_id: interaction.guildId,
         channel_id: interaction.channelId,
         creator_id: interaction.user.id,
@@ -312,18 +317,28 @@ client.on('interactionCreate', async (interaction) => {
         leader: interaction.user.displayName || interaction.user.username,
       });
 
-      const signups = db.getSignups(event.id) || [];
-      const msgData = buildEventMessage(event, signups, null);
+      const eventId = createdEvent.id;
+      const signups = db.getSignups(eventId) || [];
+      const msgData = buildEventMessage(createdEvent, signups, null);
 
+      // Đăng tin nhắn sự kiện lên kênh Discord
       const sent = await interaction.channel.send(msgData);
-      db.setEventMessage(event.id, sent.id);
-      event.message_id = sent.id;
 
-      client.scheduleEventRoomCreation(client, event);
+      // QUAN TRỌNG: Lưu message_id chính xác vào CSDL để tính năng tự xóa hoạt động
+      if (typeof db.setEventMessage === 'function') {
+        db.setEventMessage(eventId, sent.id);
+      }
+      createdEvent.message_id = sent.id;
 
-      return interaction.editReply({ content: `✅ Đã tạo sự kiện **FARM CAMP GROUP #${event.id}** thành công!` });
+      // Lên lịch tự động tạo phòng voice
+      if (typeof client.scheduleEventRoomCreation === 'function') {
+        client.scheduleEventRoomCreation(client, createdEvent);
+      }
+
+      return interaction.editReply({ content: `✅ Đã tạo sự kiện **FARM CAMP GROUP #${eventId}** thành công!` });
     }
 
+    // Xử lý nút chọn Role / Trạng thái / Menu Vũ khí
     if (interaction.isButton() || interaction.isStringSelectMenu()) {
       const customId = interaction.customId;
       const parts = customId.split('_');
@@ -346,7 +361,7 @@ client.on('interactionCreate', async (interaction) => {
       if (['tank', 'dps', 'healer', 'support'].includes(action)) {
         const roleName = action.toUpperCase();
         
-        // NẾU ĐỔI ROLE: Reset lại vũ khí (job = null) để không bị dính vũ khí cũ
+        // Reset vũ khí khi đổi Role
         const currentSignup = db.getSignup(eventId, userId);
         if (currentSignup && currentSignup.role !== roleName) {
           db.upsertSignup(eventId, userId, username, { role: roleName, job: null, status: 'attending' });

@@ -1,8 +1,9 @@
-const { Client, GatewayIntentBits, Collection, Options } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Options, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const config = require('./config');
 const eventCommand = require('./commands/event');
 const db = require('./db');
 const { buildEventMessage } = require('./lib/embed');
+const { parseEventTime } = require('./lib/time');
 const BUILDS_DATA = require('./data/builds');
 
 // ID Kênh Moderator chứa các bài đăng Build chuẩn
@@ -246,7 +247,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 });
 
 /**
- * 4. XỬ LÝ TƯƠNG TÁC NÚT BẤM & MENU CHỌN VŨ KHÍ
+ * 4. XỬ LÝ TƯƠNG TÁC NÚT BẤM, MODAL SUBMIT & MENU CHỌN VŨ KHÍ
  */
 client.on('interactionCreate', async (interaction) => {
   try {
@@ -255,6 +256,72 @@ client.on('interactionCreate', async (interaction) => {
       if (!command) return;
       await command.execute(interaction);
       return;
+    }
+
+    // Xử lý nút bấm mở Modal Form Farm Camp
+    if (interaction.isButton() && interaction.customId === 'open_farm_camp_modal') {
+      const modal = new ModalBuilder()
+        .setCustomId('submit_farm_camp_modal')
+        .setTitle('🏕️ TẠO SỰ KIỆN FARM CAMP GROUP');
+
+      const timeInput = new TextInputBuilder()
+        .setCustomId('farm_time')
+        .setLabel('Giờ hẹn (Ví dụ: 20:00, 20h30, 8pm)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Nhập giờ hẹn...')
+        .setRequired(true);
+
+      const descInput = new TextInputBuilder()
+        .setCustomId('farm_desc')
+        .setLabel('Yêu cầu Min IP / Gear')
+        .setStyle(TextInputStyle.Paragraph)
+        .setValue('Min 1400 IP - Chuẩn bị đầy đủ food/potion!')
+        .setRequired(false);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(timeInput),
+        new ActionRowBuilder().addComponents(descInput)
+      );
+
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // Xử lý khi người dùng ấn "Gửi" từ Form Modal Farm Camp
+    if (interaction.isModalSubmit() && interaction.customId === 'submit_farm_camp_modal') {
+      await interaction.deferReply({ ephemeral: true });
+
+      const timeStr = interaction.fields.getTextInputValue('farm_time');
+      const description = interaction.fields.getTextInputValue('farm_desc') || 'Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
+      const title = 'FARM CAMP GROUP';
+
+      const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');
+      if (!parsed.valid) {
+        return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
+      }
+
+      const event = db.createEvent({
+        guild_id: interaction.guildId,
+        channel_id: interaction.channelId,
+        creator_id: interaction.user.id,
+        creator_name: interaction.user.displayName || interaction.user.username,
+        title,
+        description,
+        start_ts: parsed.startTs,
+        timezone: 'Asia/Ho_Chi_Minh',
+        leader: interaction.user.displayName || interaction.user.username,
+      });
+
+      const signups = db.getSignups(event.id) || [];
+      const msgData = buildEventMessage(event, signups, null);
+
+      const sent = await interaction.channel.send(msgData);
+      db.setEventMessage(event.id, sent.id);
+      event.message_id = sent.id;
+
+      client.scheduleEventRoomCreation(client, event);
+
+      return interaction.editReply({ content: `✅ Đã tạo sự kiện **FARM CAMP GROUP #${event.id}** thành công!` });
     }
 
     if (interaction.isButton() || interaction.isStringSelectMenu()) {

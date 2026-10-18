@@ -2,11 +2,11 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 const BUILDS_DATA = require('../data/builds');
 
-// Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role
+// Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role (Đã thêm Rootbound Staff vào SUPPORT)
 const CORE_SLOTS_BY_ROLE = {
   TANK: ['Dreadstorm Monarch'],
   HEALER: ['Blight Staff'],
-  SUPPORT: [],
+  SUPPORT: ['Rootbound Staff'],
   DPS: ['Lightcaller', 'Hellspawn Staff']
 };
 

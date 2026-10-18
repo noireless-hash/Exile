@@ -31,7 +31,7 @@ module.exports = {
           opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true)
         )
         .addStringOption((opt) =>
-          opt.setName('description').setDescription('Yêu cầu Min IP / Gear Tier (Mặc định: Min 1400 IP)').setRequired(false)
+          opt.setName('description').setDescription('Yêu cầu Min IP / Gear Tier (Mặc định: Min 1500 IP)').setRequired(false)
         )
     )
     .addSubcommand((sub) =>
@@ -95,7 +95,7 @@ module.exports = {
 
         if (subcommand === 'farm_camp_group') {
           title = 'FARM CAMP GROUP';
-          description = interaction.options.getString('description') || 'Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
+          description = interaction.options.getString('description') || 'Min 1500 IP - Chuẩn bị đầy đủ food/potion!';
         } else {
           title = interaction.options.getString('title');
           description = interaction.options.getString('description') || null;

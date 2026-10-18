@@ -2,7 +2,9 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 const BUILDS_DATA = require('../data/builds');
 
-// Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role (Đã thêm Rootbound Staff vào SUPPORT)
+/**
+ * Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role
+ */
 const CORE_SLOTS_BY_ROLE = {
   TANK: ['Dreadstorm Monarch'],
   HEALER: ['Blight Staff'],
@@ -37,6 +39,7 @@ function buildWeaponSelectMenu(eventId, role) {
     .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   if (roleUpper && WEAPONS_BY_ROLE[roleUpper]) {
+    // Discord giới hạn tối đa 25 tùy chọn cho mỗi Select Menu
     const weaponsList = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
 
     selectMenu
@@ -91,7 +94,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
     const requiredCoreWeapons = CORE_SLOTS_BY_ROLE[r.key] || [];
     let displayLines = [];
 
-    // 1. Ghim sẵn các slot vũ khí Core lên trên cùng
+    // 1. Ghim sẵn các slot vũ khí Core lên trên cùng (nếu chưa có ai nhận sẽ hiện Trống)
     for (const coreWeaponName of requiredCoreWeapons) {
       const assignedUser = list.find(s => s.job && s.job.toLowerCase() === coreWeaponName.toLowerCase());
       
@@ -108,7 +111,7 @@ function buildEventMessage(event, signups = [], currentRole = null) {
       }
     }
 
-    // 2. Hiển thị các thành viên đăng ký các vũ khí khác ngoài Core ghim
+    // 2. Hiển thị các thành viên đăng ký các vũ khí khác ngoài các slot Core đã ghim
     const otherUsers = list.filter(s => !s.job || !requiredCoreWeapons.some(cw => cw.toLowerCase() === s.job.toLowerCase()));
     for (const s of otherUsers) {
       let weaponEmojiStr = '';
@@ -160,6 +163,9 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   };
 }
 
+/**
+ * Bảng Đăng Nút Tạo Sự Kiện Cố Định (Bao gồm nút Event Thường và Farm Camp)
+ */
 function buildCreateBoardMessage() {
   const embed = new EmbedBuilder()
     .setColor(0xAA8833)
@@ -169,9 +175,14 @@ function buildCreateBoardMessage() {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('open_create_event_modal')
-      .setLabel('Tạo Sự Kiện Mới')
+      .setLabel('Tạo Event Thường')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('📅'),
+    new ButtonBuilder()
+      .setCustomId('open_farm_camp_modal')
+      .setLabel('Tạo Farm Camp Group')
       .setStyle(ButtonStyle.Success)
-      .setEmoji('📅')
+      .setEmoji('🏕️')
   );
 
   return { embeds: [embed], components: [row] };

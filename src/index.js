@@ -164,7 +164,7 @@ function scheduleEventRoomCreation(client, event) {
       });
 
       managedEventRooms.add(createdChannel.id);
-      console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}: ${createdChannel.name}`);
+      console.log(`🏰 Đã tự động tạo phòng thoại cho sự kiện #${event.id}:${createdChannel.name}`);
 
       try {
         const mentions = attendingMembers.map(m => `<@${m.user_id}>`).join(' ');
@@ -278,7 +278,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId('farm_desc')
         .setLabel('Yêu cầu Min IP / Gear')
         .setStyle(TextInputStyle.Paragraph)
-        .setValue('Min 1400 IP - Chuẩn bị đầy đủ food/potion!')
+        .setValue('Min 1500 IP - Chuẩn bị đầy đủ food/potion!')
         .setRequired(false);
 
       modal.addComponents(
@@ -295,7 +295,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply({ ephemeral: true });
 
       const timeStr = interaction.fields.getTextInputValue('farm_time');
-      const description = interaction.fields.getTextInputValue('farm_desc') || 'Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
+      const description = interaction.fields.getTextInputValue('farm_desc') || 'Min 1500 IP - Chuẩn bị đầy đủ food/potion!';
       const title = 'FARM CAMP GROUP';
 
       const parsed = parseEventTime('today', timeStr, 'Asia/Ho_Chi_Minh');

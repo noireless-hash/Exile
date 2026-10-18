@@ -2,10 +2,8 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { discordTime, googleCalendarLink } = require('./time');
 const BUILDS_DATA = require('../data/builds');
 
-/**
- * Định nghĩa danh sách các vũ khí Core được ghim sẵn theo từng Role
- */
-const CORE_SLOTS_BY_ROLE = {
+// Định nghĩa danh sách các vũ khí Core ĐẶC BIỆT DÀNH RIÊNG CHO FARM CAMP GROUP
+const CORE_SLOTS_FARM_CAMP = {
   TANK: ['Dreadstorm Monarch'],
   HEALER: ['Blight Staff'],
   SUPPORT: ['Rootbound Staff'],
@@ -39,7 +37,6 @@ function buildWeaponSelectMenu(eventId, role) {
     .setCustomId(`weapon_${roleClean}_${eventId}`);
 
   if (roleUpper && WEAPONS_BY_ROLE[roleUpper]) {
-    // Discord giới hạn tối đa 25 tùy chọn cho mỗi Select Menu
     const weaponsList = WEAPONS_BY_ROLE[roleUpper].slice(0, 25);
 
     selectMenu
@@ -81,7 +78,9 @@ function buildEventMessage(event, signups = [], currentRole = null) {
   const timeFormatted = `${discordTime(event.start_ts, 'F')} (${discordTime(event.start_ts, 'R')})`;
   embed.addFields({ name: '📅 Thời Gian', value: timeFormatted, inline: false });
 
-  // Sắp xếp thứ tự ưu tiên các Core Role hiển thị trước
+  // KIỂM TRA XEM ĐÂY CÓ PHẢI LÀ EVENT FARM CAMP GROUP HAY KHÔNG
+  const isFarmCamp = uppercaseTitle.includes('FARM CAMP');
+
   const roles = [
     { name: '🛡️ Tank', key: 'TANK' },
     { name: '🌿 Healer', key: 'HEALER' },
@@ -91,35 +90,52 @@ function buildEventMessage(event, signups = [], currentRole = null) {
 
   for (const r of roles) {
     const list = signups.filter(s => s.role === r.key && s.status === 'attending');
-    const requiredCoreWeapons = CORE_SLOTS_BY_ROLE[r.key] || [];
     let displayLines = [];
 
-    // 1. Ghim sẵn các slot vũ khí Core lên trên cùng (nếu chưa có ai nhận sẽ hiện Trống)
-    for (const coreWeaponName of requiredCoreWeapons) {
-      const assignedUser = list.find(s => s.job && s.job.toLowerCase() === coreWeaponName.toLowerCase());
-      
-      let weaponEmojiStr = '';
-      if (BUILDS_DATA[coreWeaponName]) {
-        const cleanName = coreWeaponName.replace(/[^a-zA-Z0-9]/g, '');
-        weaponEmojiStr = `<:${cleanName}:${BUILDS_DATA[coreWeaponName].emojiId}> `;
+    // TRƯỜNG HỢP 1: NẾU LÀ SỰ KIỆN FARM CAMP -> DÙNG SLOT CORE GHIM SẴN
+    if (isFarmCamp) {
+      const requiredCoreWeapons = CORE_SLOTS_FARM_CAMP[r.key] || [];
+
+      // 1. Ghim sẵn các slot vũ khí Core
+      for (const coreWeaponName of requiredCoreWeapons) {
+        const assignedUser = list.find(s => s.job && s.job.toLowerCase() === coreWeaponName.toLowerCase());
+        
+        let weaponEmojiStr = '';
+        if (BUILDS_DATA[coreWeaponName]) {
+          const cleanName = coreWeaponName.replace(/[^a-zA-Z0-9]/g, '');
+          weaponEmojiStr = `<:${cleanName}:${BUILDS_DATA[coreWeaponName].emojiId}> `;
+        }
+
+        if (assignedUser) {
+          displayLines.push(`• **${assignedUser.username}** (${weaponEmojiStr}${assignedUser.job})`);
+        } else {
+          displayLines.push(`• _Trống_ (${weaponEmojiStr}${coreWeaponName})`);
+        }
       }
 
-      if (assignedUser) {
-        displayLines.push(`• **${assignedUser.username}** (${weaponEmojiStr}${assignedUser.job})`);
-      } else {
-        displayLines.push(`• _Trống_ (${weaponEmojiStr}${coreWeaponName})`);
+      // 2. Hiển thị các thành viên đăng ký thêm ngoài slot Core
+      const otherUsers = list.filter(s => !s.job || !requiredCoreWeapons.some(cw => cw.toLowerCase() === s.job.toLowerCase()));
+      for (const s of otherUsers) {
+        let weaponEmojiStr = '';
+        if (s.job && BUILDS_DATA[s.job]) {
+          const cleanEmojiName = s.job.replace(/[^a-zA-Z0-9]/g, '');
+          weaponEmojiStr = `<:${cleanEmojiName}:${BUILDS_DATA[s.job].emojiId}> `;
+        }
+        displayLines.push(`• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`);
       }
-    }
-
-    // 2. Hiển thị các thành viên đăng ký các vũ khí khác ngoài các slot Core đã ghim
-    const otherUsers = list.filter(s => !s.job || !requiredCoreWeapons.some(cw => cw.toLowerCase() === s.job.toLowerCase()));
-    for (const s of otherUsers) {
-      let weaponEmojiStr = '';
-      if (s.job && BUILDS_DATA[s.job]) {
-        const cleanEmojiName = s.job.replace(/[^a-zA-Z0-9]/g, '');
-        weaponEmojiStr = `<:${cleanEmojiName}:${BUILDS_DATA[s.job].emojiId}> `;
+    } 
+    // TRƯỜNG HỢP 2: CÁC EVENT KHÁC (SMC, ZVZ, AVATAR, GANK...) -> HIỂN THỊ ĐƠN GIẢN THƯỜNG
+    else {
+      if (list.length > 0) {
+        for (const s of list) {
+          let weaponEmojiStr = '';
+          if (s.job && BUILDS_DATA[s.job]) {
+            const cleanEmojiName = s.job.replace(/[^a-zA-Z0-9]/g, '');
+            weaponEmojiStr = `<:${cleanEmojiName}:${BUILDS_DATA[s.job].emojiId}> `;
+          }
+          displayLines.push(`• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`);
+        }
       }
-      displayLines.push(`• **${s.username}** ${s.job ? `(${weaponEmojiStr}${s.job})` : ''}`);
     }
 
     const valueStr = displayLines.length > 0 ? displayLines.join('\n') : '_Trống_';
@@ -175,7 +191,7 @@ function buildCreateBoardMessage() {
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('open_create_event_modal')
-      .setLabel('Tạo Event Thường')
+      .setLabel('Tạo Event Thường (SMC/ZvZ/Gank)')
       .setStyle(ButtonStyle.Primary)
       .setEmoji('📅'),
     new ButtonBuilder()

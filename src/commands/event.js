@@ -12,9 +12,9 @@ module.exports = {
     .addSubcommand((sub) =>
       sub
         .setName('create')
-        .setDescription('Tạo một sự kiện mới trong ngày')
+        .setDescription('Tạo một sự kiện mới trong ngày (SMC, ZvZ, Gank...)')
         .addStringOption((opt) =>
-          opt.setName('title').setDescription('Tên sự kiện (VD: ZvZ Martlock / Ava Raid)').setRequired(true)
+          opt.setName('title').setDescription('Tên sự kiện (VD: ZvZ Martlock / SMC OP+GANK)').setRequired(true)
         )
         .addStringOption((opt) =>
           opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true)
@@ -25,7 +25,7 @@ module.exports = {
     )
     .addSubcommand((sub) =>
       sub
-        .setName('farm')
+        .setName('farm_camp_group')
         .setDescription('Tạo nhanh sự kiện FARM CAMP GROUP với các slot Core ghim sẵn')
         .addStringOption((opt) =>
           opt.setName('time').setDescription('Giờ hẹn (VD: 20:00, 20h30, 8pm)').setRequired(true)
@@ -51,7 +51,7 @@ module.exports = {
 
     const subcommand = interaction.options.getSubcommand();
 
-    // 1. XỬ LÝ ĐĂNG BẢNG
+    // 1. XỬ LÝ ĐĂNG BẢNG TẠO EVENT CỐ ĐỊNH
     if (subcommand === 'board') {
       try {
         const msgData = buildCreateBoardMessage();
@@ -62,8 +62,8 @@ module.exports = {
       }
     }
 
-    // 2. XỬ LÝ TẠO EVENT CHUNG HOẶC EVENT FARM CAMP
-    if (subcommand === 'create' || subcommand === 'farm') {
+    // 2. XỬ LÝ TẠO EVENT CHUNG HOẶC EVENT FARM CAMP GROUP
+    if (subcommand === 'create' || subcommand === 'farm_camp_group') {
       const userId = interaction.user.id;
 
       if (creationLocks.has(userId)) {
@@ -73,7 +73,7 @@ module.exports = {
       creationLocks.add(userId);
 
       try {
-        // Kiểm tra điều kiện Event trước đó đủ 4 người hay chưa
+        // Kiểm tra điều kiện Event trước đó có đủ 4 người hay chưa
         if (typeof db.getLatestEvent === 'function') {
           const previousEvent = db.getLatestEvent();
           if (previousEvent) {
@@ -89,13 +89,13 @@ module.exports = {
           }
         }
 
-        // Tự động gán Tiêu đề và Mô tả mặc định nếu là Form Farm Camp
+        // Đặt tiêu đề và ghi chú tùy theo subcommand
         let title = '';
         let description = null;
 
-        if (subcommand === 'farm') {
+        if (subcommand === 'farm_camp_group') {
           title = 'FARM CAMP GROUP';
-          description = interaction.options.getString('description') || 'Yêu cầu Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
+          description = interaction.options.getString('description') || 'Min 1400 IP - Chuẩn bị đầy đủ food/potion!';
         } else {
           title = interaction.options.getString('title');
           description = interaction.options.getString('description') || null;
@@ -109,7 +109,7 @@ module.exports = {
           return interaction.editReply({ content: `❌ Định dạng giờ không hợp lệ: ${parsed.error}` });
         }
 
-        const event = db.createEvent({
+        const createdEvent = db.createEvent({
           guild_id: interaction.guildId,
           channel_id: interaction.channelId,
           creator_id: interaction.user.id,
@@ -121,24 +121,19 @@ module.exports = {
           leader: interaction.user.displayName || interaction.user.username,
         });
 
-        const eventId = event.id;
+        const eventId = createdEvent.id;
         const signups = (typeof db.getSignups === 'function' ? db.getSignups(eventId) : []) || [];
 
-        // Soạn giao diện bảng Event với các slot Core được ghim sẵn từ lib/embed.js
-        const msgData = buildEventMessage(event, signups, null);
+        const msgData = buildEventMessage(createdEvent, signups, null);
 
         const sent = await interaction.channel.send(msgData);
         if (typeof db.setEventMessage === 'function') {
           db.setEventMessage(eventId, sent.id);
         }
-        event.message_id = sent.id;
-
-        if (typeof interaction.client.trackEventForExpiration === 'function') {
-          interaction.client.trackEventForExpiration(interaction.channel.id, sent.id, eventId, event.start_ts, interaction.guildId);
-        }
+        createdEvent.message_id = sent.id;
 
         if (typeof interaction.client.scheduleEventRoomCreation === 'function') {
-          interaction.client.scheduleEventRoomCreation(interaction.client, event);
+          interaction.client.scheduleEventRoomCreation(interaction.client, createdEvent);
         }
 
         creationLocks.delete(userId);

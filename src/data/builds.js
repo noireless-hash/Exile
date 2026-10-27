@@ -40,5 +40,9 @@ module.exports = {
   "Longbow": { role: "DPS", emojiId: "1560782230035366059" },
   "Mistpiercer": { role: "DPS", emojiId: "1560782377704235099" },
   "Permafrost Prism": { role: "DPS", emojiId: "1560782111517048973" },
-  "Realmbreaker": { role: "DPS", emojiId: "1560804559176339456" }
+  "Realmbreaker": { role: "DPS", emojiId: "1560804559176339456" },
+  "Galatine Pair": { role: "DPS", emojiId: "1564614625046167633" },
+  "Energy Shaper": { role: "DPS", emojiId: "1564615377386995782" },
+  "Wailing Bow": { role: "DPS", emojiId: "1564615741586669638" },
+  "Spirithunter": { role: "DPS", emojiId: "1564616200535810209" }
 };

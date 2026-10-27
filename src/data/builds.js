@@ -1,58 +1,44 @@
-/**
- * Dữ liệu Mapping chuẩn xác gồm:
- * - emojiId: ID Emoji Discord
- * - messageId: ID bài đăng Build trong kênh Moderator
- * - role: TANK | HEALER | SUPPORT | DPS
- */
-const BUILDS_DATA = {
-  'Arcane Staff': { emojiId: '1560781976380641411', messageId: '1560857556853858375', role: 'SUPPORT' },
-  'Arclight Blasters': { emojiId: '1560782694584025088', messageId: '1560858371928752160', role: 'DPS' },
-  'Arctic Staff': { emojiId: '1560782143028731968', messageId: '1560858832026992705', role: 'DPS' },
-  'Astral Staff': { emojiId: '1560782073847881790', messageId: '1560442739630411836', role: 'DPS' },
-  'Bedrock Mace': { emojiId: '1560804439030239233', messageId: '1560859498074214400', role: 'TANK' },
-  'Blight Staff': { emojiId: '1560782614602711110', messageId: '1560437358485311508', role: 'HEALER' },
-  'Bloodmoon Staff': { emojiId: '1560782513327312958', messageId: '1560860574307586058', role: 'DPS' },
-  'Bow of Badon': { emojiId: '1560782257776623678', messageId: '1560861374953816074', role: 'DPS' },
-  'Carrioncaller': { emojiId: '1560804522484301824', messageId: '1560861734246293644', role: 'DPS' },
-  'Crystal Reaper': { emojiId: '1560804582517645442', messageId: '1549392507497095248', role: 'DPS' },
-  'Dawnsong': { emojiId: '1560781806742016020', messageId: '1560862071997075538', role: 'DPS' },
-  'Daybreaker': { emojiId: '1560782408188694669', messageId: '1560862460406145024', role: 'DPS' },
-  'Dreadstorm Monarch': { emojiId: '1560804258985550005', messageId: '1549391507105255505', role: 'TANK' },
-  'Earthrune Staff': { emojiId: '1560782564321665054', messageId: '1560863306233946163', role: 'TANK' },
-  'Enigmatic Staff': { emojiId: '1560782004742660106', messageId: '1560863821520699563', role: 'SUPPORT' },
-  'Fallen Staff': { emojiId: '1560781876828839956', messageId: '1560864319481061567', role: 'HEALER' },
-  'Fists of Avalon': { emojiId: '1560784156034732132', messageId: '1560864764438118551', role: 'DPS' },
-  'Forcepulse Bracers': { emojiId: '1560784181649346580', messageId: '1560865066163642418', role: 'DPS' },
-  'Forge Hammers': { emojiId: '1560804214610067456', messageId: '1560865559657193512', role: 'DPS' },
-  'Forgebark Staff': { emojiId: '1560782665924481034', messageId: '1560866058577903677', role: 'HEALER' },
-  'Great Arcane Staff': { emojiId: '1560782040457027705', messageId: '1560866512904917063', role: 'TANK' },
-  'Halberd': { emojiId: '1560804499197657209', messageId: '1560867020692787240', role: 'DPS' },
-  'Hallowfall': { emojiId: '1560781939982475346', messageId: '1560443823719579679', role: 'HEALER' },
-  'Hand of Justice': { emojiId: '1560804317026451517', messageId: '1560867749847371806', role: 'TANK' },
-  'Heavy Mace': { emojiId: '1560804414275719289', messageId: '1549393450808385586', role: 'TANK' },
-  'Hellspawn Staff': { emojiId: '1560782540573384794', messageId: '1549392151119527956', role: 'DPS' },
-  'Heron Spear': { emojiId: '1560782343449608202', messageId: '1560868034619379863', role: 'DPS' },
-  'Infernal Staff': { emojiId: '1560781838035853422', messageId: '1560868300328665178', role: 'DPS' },
-  'Infinity Blade': { emojiId: '1560804640944169031', messageId: '1560868634144800888', role: 'DPS' },
-  'Kingmaker': { emojiId: '1560804607494590604', messageId: '1560868835421327430', role: 'DPS' },
-  'Lifecurse Staff': { emojiId: '1560782202529390692', messageId: '1560869294496030771', role: 'SUPPORT' },
-  'Lightcaller': { emojiId: '1560782589864968272', messageId: '1549391940271734784', role: 'DPS' },
-  'Longbow': { emojiId: '1560782230035366059', messageId: '1560869589603328050', role: 'DPS' },
-  'Mistpiercer': { emojiId: '1560782377704235099', messageId: '1560869979082072215', role: 'DPS' },
-  'Oathkeepers': { emojiId: '1560804473381847112', messageId: '1560870293764055101', role: 'SUPPORT' },
-  'Permafrost Prism': { emojiId: '1560782111517048973', messageId: '1560441868075008020', role: 'DPS' },
-  'Phantom Twinblade': { emojiId: '1560782431047393402', messageId: '1560870770308022353', role: 'DPS' },
-  'Polehammer': { emojiId: '1560795012835577948', messageId: '1560871208449212438', role: 'TANK' },
-  'Primal Staff': { emojiId: '1560782485481201734', messageId: '1560871520413286440', role: 'TANK' },
-  'Rampant Staff': { emojiId: '1560782640238567505', messageId: '1560871955383713963', role: 'HEALER' },
-  'Realmbreaker': { emojiId: '1560804559176339456', messageId: '1560872332984193064', role: 'DPS' },
-  'Redemption Staff': { emojiId: '1560781907568889967', messageId: '1560872572281815080', role: 'HEALER' },
-  'Rootbound Staff': { emojiId: '1560782458457165834', messageId: '1549393865599877150', role: 'SUPPORT' },
-  'Rotcaller Staff': { emojiId: '1560782174700183632', messageId: '1560872890797396010', role: 'SUPPORT' },
-  'Spiked Gauntlets': { emojiId: '1560784098681684089', messageId: '1560873088306913400', role: 'DPS' },
-  'Truebolt Hammer': { emojiId: '1560804387452887040', messageId: '1560873481275449374', role: 'TANK' },
-  'Twin Slayers': { emojiId: '1560782313460080770', messageId: '1560873677816340581', role: 'DPS' },
-  'Ursine Maulers': { emojiId: '1560784130600468570', messageId: '1560873824424169552', role: 'DPS' },
-};
+module.exports = {
+  // --- TANK ---
+  "Arcane": { role: "TANK", emojiId: "1560781976380641411" },
+  "Bedrock": { role: "TANK", emojiId: "1560804439030239233" },
+  "Dreadstorm Monarch": { role: "TANK", emojiId: "1560804258985550005" },
+  "Earthrune": { role: "TANK", emojiId: "1560782564321665054" },
+  "Great Arcane": { role: "TANK", emojiId: "1560782040457027705" },
+  "Heavy Mace": { role: "TANK", emojiId: "1560804414275719289" },
+  "Polehammer": { role: "TANK", emojiId: "1560795012835577948" },
+  "Great Hammer": { role: "TANK", emojiId: "1564566415145701496" },
 
-module.exports = BUILDS_DATA;
+  // --- HEALER ---
+  "Blight Staff": { role: "HEALER", emojiId: "1560782614602711110" },
+  "Fallen": { role: "HEALER", emojiId: "1560781876828839956" },
+  "Forgebark": { role: "HEALER", emojiId: "1560782665924481034" },
+  "Hallowfall": { role: "HEALER", emojiId: "1560781939982475346" },
+  "Redemption": { role: "HEALER", emojiId: "1560781907568889967" },
+
+  // --- SUPPORT ---
+  "Lifecurse": { role: "SUPPORT", emojiId: "1560782202529390692" },
+  "Oathkeepers": { role: "SUPPORT", emojiId: "1560804473381847112" },
+  "Rootbound Staff": { role: "SUPPORT", emojiId: "1560782458457165834" },
+  "Rotcaller": { role: "SUPPORT", emojiId: "1560782174700183632" },
+
+  // --- DPS ---
+  "Arclight Blasters": { role: "DPS", emojiId: "1560782694584025088" },
+  "Astral": { role: "DPS", emojiId: "1560782073847881790" },
+  "Bloodmoon": { role: "DPS", emojiId: "1560782513327312958" },
+  "Carrioncaller": { role: "DPS", emojiId: "1560804522484301824" },
+  "Crystal Reaper": { role: "DPS", emojiId: "1560804582517645442" },
+  "Dawnsong": { role: "DPS", emojiId: "1560781806742016020" },
+  "Forcepulse Bracers": { role: "DPS", emojiId: "1560784181649346580" },
+  "Forge Hammers": { role: "DPS", emojiId: "1560804214610067456" },
+  "Halberd": { role: "DPS", emojiId: "1560804499197657209" },
+  "Hellfire": { role: "DPS", emojiId: "1564555492766777474" },
+  "Hellspawn Staff": { role: "DPS", emojiId: "1560782540573384794" },
+  "Infinity Blade": { role: "DPS", emojiId: "1560804640944169031" },
+  "Kingmaker": { role: "DPS", emojiId: "1560804607494590604" },
+  "Lightcaller": { role: "DPS", emojiId: "1560782589864968272" },
+  "Longbow": { role: "DPS", emojiId: "1560782230035366059" },
+  "Mistpiercer": { role: "DPS", emojiId: "1560782377704235099" },
+  "Permafrost Prism": { role: "DPS", emojiId: "1560782111517048973" },
+  "Realmbreaker": { role: "DPS", emojiId: "1560804559176339456" }
+};
